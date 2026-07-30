@@ -11,6 +11,7 @@ import {
   RotateCcw,
   SkipForward,
   User,
+  Bot,
 } from "lucide-react";
 import { GameBoard, type Cell } from "@/components/arena/GameBoard";
 import { Disc, Panel, Row } from "@/components/arena/panels";
@@ -70,15 +71,15 @@ function AgentCard({
 }) {
   return (
     <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 rounded-lg border border-border bg-secondary/40 p-4">
-      <div className="grid h-14 w-14 shrink-0 place-items-center rounded-lg bg-background text-2xl">
-        {color === "W" ? "🤖" : "🤖"}
+      <div className="grid h-14 w-14 shrink-0 place-items-center rounded-lg bg-background">
+        <Bot className={`h-8 w-8 ${color === "W" ? "text-piece-white" : "text-muted-foreground"}`} />
       </div>
       <div className="min-w-0">
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           {side}
         </p>
         <p className="truncate font-display text-xl font-bold">{name}</p>
-        <p className="truncate text-xs text-muted-foreground">Algorithm: {algorithm}</p>
+        <p className="text-xs text-muted-foreground">Algorithm: {algorithm}</p>
       </div>
       <span
         className={`h-5 w-5 shrink-0 rounded-full border ${
@@ -150,7 +151,7 @@ function Index() {
           </Panel>
 
           <Panel title="Simulation Controls">
-            <div className="grid grid-cols-3 gap-3 p-4">
+            <div className="grid grid-cols-3 gap-3 px-4 pt-4">
               <button className="flex items-center justify-center gap-2 rounded-md bg-success/25 py-3 text-sm font-semibold uppercase tracking-wide text-success transition-colors hover:bg-success/35">
                 <Play className="h-4 w-4 fill-current" /> Start
               </button>
@@ -160,10 +161,12 @@ function Index() {
               <button className="flex items-center justify-center gap-2 rounded-md bg-info/25 py-3 text-sm font-semibold uppercase tracking-wide text-info transition-colors hover:bg-info/35">
                 <Play className="h-4 w-4" /> Resume
               </button>
-              <button className="col-span-2 flex items-center justify-center gap-2 rounded-md bg-violet/40 py-3 text-sm font-semibold uppercase tracking-wide text-foreground transition-colors hover:bg-violet/55 sm:col-span-1">
+            </div>
+            <div className="grid grid-cols-2 gap-3 p-4">
+              <button className="flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-violet/40 py-3 text-sm font-semibold uppercase tracking-wide text-foreground transition-colors hover:bg-violet/55">
                 <SkipForward className="h-4 w-4" /> Next Move
               </button>
-              <button className="col-span-2 flex items-center justify-center gap-2 rounded-md bg-danger/70 py-3 text-sm font-semibold uppercase tracking-wide text-foreground transition-colors hover:bg-danger">
+              <button className="flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-danger/70 py-3 text-sm font-semibold uppercase tracking-wide text-foreground transition-colors hover:bg-danger">
                 <RotateCcw className="h-4 w-4" /> Reset
               </button>
             </div>
@@ -175,7 +178,7 @@ function Index() {
                 {speeds.map((s) => (
                   <button
                     key={s}
-                    className={`min-w-[54px] rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
+                    className={`min-w-[48px] flex-1 rounded-md border px-2 py-1.5 text-sm font-medium transition-colors ${
                       s === "1x"
                         ? "border-info bg-info/80 text-foreground"
                         : "border-border bg-secondary/50 text-muted-foreground hover:bg-secondary"
