@@ -146,8 +146,9 @@ class Agent {
     }
 
     public saveTrainingNetwork(): void {
+        
         if (this.mode !== 0) return;
-        this.network.printChangedWeights(this.networkWeights ?? []);
+        // this.network.printChangedWeights(this.networkWeights ?? []);
         this.network.saveToLocalStorage(Agent.getNetworkStorageKey(this.Player));
     }
 
@@ -192,7 +193,6 @@ class Agent {
 
             if (this.mode === 0) {
                 makeTDTrainingMove(this.network, match, 0.9, 0.1, [capture, move]);
-                //console.log(`Training new weights: ${this.network.model.getWeights().map((weight) => weight.dataSync())}`);
             }
 
             return [capture, move];

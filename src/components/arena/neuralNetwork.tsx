@@ -35,10 +35,6 @@ export class NeuralNetwork {
             }),
         );
 
-        this.model.compile({
-            optimizer: tf.train.adam(0.001),
-            loss: "meanSquaredError",
-        });
     }
 
     public saveToLocalStorage(key: string): void {
@@ -58,6 +54,7 @@ export class NeuralNetwork {
         if (typeof localStorage === "undefined") return false;
 
         const serializedWeights = localStorage.getItem(key);
+   
         if (!serializedWeights) return false;
 
         try {
@@ -70,6 +67,7 @@ export class NeuralNetwork {
 
             const tensors = weights.map(({ shape, values }) => tf.tensor(values, shape));
             this.model.setWeights(tensors);
+     
             return true;
         } catch {
             return false;
@@ -90,6 +88,7 @@ export class NeuralNetwork {
 
         const input = tf.tensor2d([stateArray]);
 
+
         const output = this.model.predict(input) as tf.Tensor;
 
         const value = output.dataSync()[0];
@@ -98,20 +97,6 @@ export class NeuralNetwork {
         output.dispose();
 
         return value;
-    }
-
-    public train(state: number[], target: number): void {
-        const input = tf.tensor2d([state]);
-
-        const targetTensor = tf.tensor2d([[target]]);
-
-        this.model.fit(input, targetTensor, {
-            epochs: 1,
-            verbose: 0,
-        });
-
-        input.dispose();
-        targetTensor.dispose();
     }
 
         public printChangedWeights(oldWeights: number[]) {
@@ -151,6 +136,32 @@ export class NeuralNetwork {
         }
 
         return allWeights;
+    }
+
+    public inspectFirstLayer(state: tf.Tensor2D): void {
+
+        const firstLayer = this.model.layers[0];
+
+        const activationModel = tf.model({
+            inputs: this.model.inputs,
+            outputs: firstLayer.output as tf.SymbolicTensor,
+        });
+
+        const output = activationModel.predict(state) as tf.Tensor;
+
+        const values = Array.from(output.dataSync());
+
+        let zeroCount = 0;
+        let positiveCount = 0;
+
+        for (const value of values) {
+            if (value === 0) {
+                zeroCount++;
+            } else if (value > 0) {
+                positiveCount++;
+            }
+        }
+
     }
 
    public tdZeroUpdate(
@@ -205,15 +216,18 @@ export class NeuralNetwork {
 
     const tdError =
         reward + gamma * nextValue - stateValue;
-
+    
     const gradients = tf.variableGrads(() => {
         const prediction =
             this.model.predict(stateTensor) as tf.Tensor;
 
         return prediction.mean();
     });
-
+  
     const weights = this.model.getWeights();
+
+    this.inspectFirstLayer(stateTensor);
+
 
     const updatedWeights: tf.Tensor[] = [];
 

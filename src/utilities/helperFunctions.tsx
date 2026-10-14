@@ -701,54 +701,61 @@ export const chooseTDMove = (
     network: NeuralNetwork,
     match: Match,
     player: Binary,
+    epsilon: number = 0.1,
 ): [number, Movement] => {
+
+    if(match.getCurrentPlayerAgent().mode==0){
+        if(epsilon>Math.random()){
+            const randomMove = getRandomMove(match);
+            const randomCapture = getRandomCapture(match);
+            return [randomCapture, randomMove];
+        }
+    }
+
     const legalMoves = GenerateLegalMoves(match, player);
+    const actionvalues: { move: Movement; capture: number; value: number }[] = [];
 
     let bestMove = legalMoves[0];
     let bestCapture = -1;
 
     let bestValue: number;
 
-    /*
-     * First evaluate the first move.
-     *
-     * If the move forms a mill, we must also consider
-     * the possible captures.
-     */
     const firstMatchCopy = copyMatch(match);
-    console.log("First Copy:", firstMatchCopy);
 
     firstMatchCopy.doMoveOrCapture(
         bestMove,
         -1,
     );
-    console.log("First Copy after move:", firstMatchCopy);
 
     const firstCaptures =
         GenerateLegalCaptures(firstMatchCopy, player);
 
     if (firstCaptures.length === 0) {
 
-        bestValue =V(network, firstMatchCopy);
-        console.log("First move value:", bestValue);
+        bestValue = V(network, firstMatchCopy);
+        actionvalues.push({
+            move: bestMove,
+            capture: -1,
+            value: bestValue,
+        });
 
     } else {
 
         const firstCapture =
             firstCaptures[0];
 
-        const captureMatchCopy =
-            copyMatch(firstMatchCopy);
+        const captureMatchCopy = copyMatch(firstMatchCopy);
 
-        captureMatchCopy.doMoveOrCapture(
-            bestMove,
-            firstCapture,
-        );
+        captureMatchCopy.doMoveOrCapture(bestMove, firstCapture);
 
-        bestValue =
-            V(network, captureMatchCopy);
+        bestValue = V(network, captureMatchCopy);
 
         bestCapture = firstCapture;
+        actionvalues.push({
+            move: bestMove,
+            capture: bestCapture,
+            value: bestValue,
+        });
     }
 
     /*
@@ -763,40 +770,30 @@ export const chooseTDMove = (
         /*
          * First make the movement.
          */
-        matchCopy.doMoveOrCapture(
-            move,
-            -1,
-        );
+        matchCopy.doMoveOrCapture(move, -1);
 
         /*
          * Now check whether a capture is available.
          */
-        const captures =
-            GenerateLegalCaptures(matchCopy, player);
+        const captures = GenerateLegalCaptures(matchCopy, player);
 
         /*
          * No capture required.
          */
         if (captures.length === 0) {
 
-            const value =V(network, matchCopy);
-            console.log(`Move ${i} value:`, value);
+            const value = V(network, matchCopy);
 
-            if (player === 0) {
+            actionvalues.push({
+                move: move,
+                capture: -1,
+                value: value,
+            });
 
-                if (value > bestValue) {
-                    bestValue = value;
-                    bestMove = move;
-                    bestCapture = -1;
-                }
-
-            } else {
-
-                if (value < bestValue) {
-                    bestValue = value;
-                    bestMove = move;
-                    bestCapture = -1;
-                }
+            if (value >= bestValue) {
+                bestValue = value;
+                bestMove = move;
+                bestCapture = -1;
             }
 
             continue;
@@ -808,42 +805,26 @@ export const chooseTDMove = (
          * We must consider every legal capture.
          */
         for (let j = 0; j < captures.length; j++) {
+            const captureMatchCopy = copyMatch(matchCopy);
 
             const capture = captures[j];
+            captureMatchCopy.doMoveOrCapture(move, capture);
 
-            const captureMatchCopy =
-                copyMatch(matchCopy);
+            const value = V(network, captureMatchCopy);           
 
-            captureMatchCopy.doMoveOrCapture(
-                move,
-                capture,
-            );
-
-            const value =
-                V(
-                    network,
-                    captureMatchCopy,
-                );
-
-            if (player === 0) {
-
-                if (value > bestValue) {
-                    bestValue = value;
-                    bestMove = move;
-                    bestCapture = capture;
-                }
-
-            } else {
-
-                if (value < bestValue) {
-                    bestValue = value;
-                    bestMove = move;
-                    bestCapture = capture;
-                }
+            if (value >= bestValue) {
+                bestValue = value;
+                bestMove = move;
+                bestCapture = capture;
             }
+
+            actionvalues.push({
+                move: move,
+                capture: capture,
+                value: value,
+            });
         }
     }
-
     return [bestCapture, bestMove];
 };
 
@@ -854,9 +835,11 @@ export function makeTDTrainingMove(
     alpha: number,
     selectedMove?: [number, Movement],
 ): number {
+
     const currentState = match.state;
 
     const player = currentState.Player;
+    
 
     const [capture, move] = selectedMove ?? chooseTDMove(network, match, player);
 
@@ -872,10 +855,10 @@ export function makeTDTrainingMove(
     const nextState = matchCopy.state;
     const terminal = matchCopy.isGameOver();
 
-    let reward = matchCopy.mill.length > 0 ? 1 : 0;
+    let reward = matchCopy.mill.length > 0 ? 1 : -1;
 
     if (matchCopy.winner !== null) {
-        reward = matchCopy.winner === player ? 5 : -5;
+        reward = matchCopy.winner === player ? 5 : 0;
     }
 
     const tdError = network.tdZeroUpdate(
