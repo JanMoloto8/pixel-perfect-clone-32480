@@ -1,0 +1,89 @@
+agent,training,seed,opponent,games,wins,draws,losses,score,avg_plies
+self-s1,Self-play,1,random,100,99,0,1,0.990,84.9
+self-s1,Self-play,1,ab1,100,27,4,69,0.290,46.7
+self-s1,Self-play,1,ab2,100,1,6,93,0.040,46.0
+self-s1,Self-play,1,ab3,100,0,1,99,0.005,41.1
+self-s1,Self-play,1,self-s2,100,52,4,44,0.540,57.9
+self-s1,Self-play,1,random-s1,100,79,3,18,0.805,46.2
+self-s1,Self-play,1,random-s2,100,58,2,40,0.590,41.3
+self-s1,Self-play,1,ab1-s1,100,86,13,1,0.925,120.1
+self-s1,Self-play,1,ab1-s2,100,75,24,1,0.870,88.9
+self-s1,Self-play,1,ab2-s1,100,81,17,2,0.895,75.9
+self-s1,Self-play,1,ab2-s2,100,86,11,3,0.915,120.9
+self-s2,Self-play,2,random,100,92,8,0,0.960,121.0
+self-s2,Self-play,2,ab1,100,26,2,72,0.270,41.6
+self-s2,Self-play,2,ab2,100,1,5,94,0.035,45.3
+self-s2,Self-play,2,ab3,100,0,0,100,0.000,37.9
+self-s2,Self-play,2,self-s1,100,44,5,51,0.465,55.8
+self-s2,Self-play,2,random-s1,100,75,3,22,0.765,55.6
+self-s2,Self-play,2,random-s2,100,75,3,22,0.765,51.0
+self-s2,Self-play,2,ab1-s1,100,66,33,1,0.825,123.3
+self-s2,Self-play,2,ab1-s2,100,79,19,2,0.885,81.5
+self-s2,Self-play,2,ab2-s1,100,76,21,3,0.865,100.0
+self-s2,Self-play,2,ab2-s2,100,74,23,3,0.855,115.8
+random-s1,vs random,1,random,100,96,0,4,0.960,43.1
+random-s1,vs random,1,ab1,100,9,9,82,0.135,47.3
+random-s1,vs random,1,ab2,100,3,8,89,0.070,44.4
+random-s1,vs random,1,ab3,100,0,0,100,0.000,36.8
+random-s1,vs random,1,self-s1,100,24,2,74,0.250,44.0
+random-s1,vs random,1,self-s2,100,23,6,71,0.260,54.0
+random-s1,vs random,1,random-s2,100,42,6,52,0.450,55.0
+random-s1,vs random,1,ab1-s1,100,92,6,2,0.950,49.9
+random-s1,vs random,1,ab1-s2,100,81,18,1,0.900,63.5
+random-s1,vs random,1,ab2-s1,100,84,5,11,0.865,52.8
+random-s1,vs random,1,ab2-s2,100,88,10,2,0.930,52.8
+random-s2,vs random,2,random,100,98,0,2,0.980,47.4
+random-s2,vs random,2,ab1,100,12,5,83,0.145,43.8
+random-s2,vs random,2,ab2,100,0,6,94,0.030,44.4
+random-s2,vs random,2,ab3,100,1,0,99,0.010,35.8
+random-s2,vs random,2,self-s1,100,33,0,67,0.330,40.5
+random-s2,vs random,2,self-s2,100,27,2,71,0.280,45.8
+random-s2,vs random,2,random-s1,100,49,5,46,0.515,57.8
+random-s2,vs random,2,ab1-s1,100,83,12,5,0.890,70.0
+random-s2,vs random,2,ab1-s2,100,79,11,10,0.845,63.8
+random-s2,vs random,2,ab2-s1,100,82,7,11,0.855,57.7
+random-s2,vs random,2,ab2-s2,100,83,12,5,0.890,64.9
+ab1-s1,vs alpha-beta d1,1,random,100,31,0,69,0.310,60.7
+ab1-s1,vs alpha-beta d1,1,ab1,100,0,31,69,0.155,63.8
+ab1-s1,vs alpha-beta d1,1,ab2,100,0,28,72,0.140,62.5
+ab1-s1,vs alpha-beta d1,1,ab3,100,0,0,100,0.000,36.5
+ab1-s1,vs alpha-beta d1,1,self-s1,100,1,30,69,0.160,118.5
+ab1-s1,vs alpha-beta d1,1,self-s2,100,4,28,68,0.180,119.7
+ab1-s1,vs alpha-beta d1,1,random-s1,100,4,4,92,0.060,47.4
+ab1-s1,vs alpha-beta d1,1,random-s2,100,4,21,75,0.145,72.9
+ab1-s1,vs alpha-beta d1,1,ab1-s2,100,12,13,75,0.185,58.6
+ab1-s1,vs alpha-beta d1,1,ab2-s1,100,23,15,62,0.305,63.1
+ab1-s1,vs alpha-beta d1,1,ab2-s2,100,39,31,30,0.545,82.0
+ab1-s2,vs alpha-beta d1,2,random,100,61,0,39,0.610,61.9
+ab1-s2,vs alpha-beta d1,2,ab1,100,0,34,66,0.170,67.0
+ab1-s2,vs alpha-beta d1,2,ab2,100,0,21,79,0.105,56.1
+ab1-s2,vs alpha-beta d1,2,ab3,100,0,0,100,0.000,35.1
+ab1-s2,vs alpha-beta d1,2,self-s1,100,3,20,77,0.130,85.8
+ab1-s2,vs alpha-beta d1,2,self-s2,100,4,18,78,0.130,78.7
+ab1-s2,vs alpha-beta d1,2,random-s1,100,4,16,80,0.120,64.8
+ab1-s2,vs alpha-beta d1,2,random-s2,100,7,15,78,0.145,63.0
+ab1-s2,vs alpha-beta d1,2,ab1-s1,100,70,19,11,0.795,65.2
+ab1-s2,vs alpha-beta d1,2,ab2-s1,100,43,18,39,0.520,66.8
+ab1-s2,vs alpha-beta d1,2,ab2-s2,100,63,27,10,0.765,71.2
+ab2-s1,vs alpha-beta d2,1,random,100,72,0,28,0.720,57.8
+ab2-s1,vs alpha-beta d2,1,ab1,100,1,5,94,0.035,41.3
+ab2-s1,vs alpha-beta d2,1,ab2,100,0,12,88,0.060,48.0
+ab2-s1,vs alpha-beta d2,1,ab3,100,0,0,100,0.000,35.8
+ab2-s1,vs alpha-beta d2,1,self-s1,100,6,9,85,0.105,71.3
+ab2-s1,vs alpha-beta d2,1,self-s2,100,5,12,83,0.110,103.3
+ab2-s1,vs alpha-beta d2,1,random-s1,100,8,7,85,0.115,56.6
+ab2-s1,vs alpha-beta d2,1,random-s2,100,7,7,86,0.105,58.1
+ab2-s1,vs alpha-beta d2,1,ab1-s1,100,53,19,28,0.625,67.0
+ab2-s1,vs alpha-beta d2,1,ab1-s2,100,30,20,50,0.400,70.5
+ab2-s1,vs alpha-beta d2,1,ab2-s2,100,56,17,27,0.645,78.8
+ab2-s2,vs alpha-beta d2,2,random,100,37,0,63,0.370,64.9
+ab2-s2,vs alpha-beta d2,2,ab1,100,4,24,72,0.160,58.7
+ab2-s2,vs alpha-beta d2,2,ab2,100,0,22,78,0.110,57.7
+ab2-s2,vs alpha-beta d2,2,ab3,100,0,0,100,0.000,35.9
+ab2-s2,vs alpha-beta d2,2,self-s1,100,2,6,92,0.050,116.6
+ab2-s2,vs alpha-beta d2,2,self-s2,100,1,25,74,0.135,126.0
+ab2-s2,vs alpha-beta d2,2,random-s1,100,3,2,95,0.040,44.5
+ab2-s2,vs alpha-beta d2,2,random-s2,100,8,4,88,0.100,53.1
+ab2-s2,vs alpha-beta d2,2,ab1-s1,100,28,33,39,0.445,81.9
+ab2-s2,vs alpha-beta d2,2,ab1-s2,100,10,33,57,0.265,75.3
+ab2-s2,vs alpha-beta d2,2,ab2-s1,100,31,21,48,0.415,83.7

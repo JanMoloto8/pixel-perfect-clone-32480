@@ -1,6 +1,7 @@
 import { Match, State, Binary } from "../components/arena/Game";
 import type { Movement } from "../components/arena/Game";
-import { NeuralNetwork } from "@/components/arena/neuralNetwork";
+import { capturablePoints, fromBitboards, GameState } from "@/rl/engine";
+import { AlphaBetaAgent } from "@/rl/agents";
 
 const MILLS: number[][] = [
     // Outer horizontal
@@ -64,7 +65,7 @@ const ADJACENT_POINTS: Record<number, number[]> = {
     16: [8, 17, 19],
     17: [16, 9, 18],
 
-    18: [7, 10, 20],
+    18: [17, 10, 20], // was [7, 10, 20]: 18 is not next to 7
     19: [11, 16, 21],
     20: [18, 12, 23],
 
@@ -116,253 +117,88 @@ export const movesList = (
     ));
 };
 
-export const GenerateLegalCaptures = (match: Match, player: Binary): number[] => {
-    const state = match?.state;
-    const millsFormed = match?.millsFormed;
-
-    if (!state || !millsFormed) return [];
-
-    if (player === 0) {
-        return state.B1.map((value, index) =>
-            value === 1 && !millsFormed.black.some((mill) => mill.includes(index)) ? index : -1,
-        ).filter((index) => index !== -1);
-    } else {
-        return state.B0.map((value, index) =>
-            value === 1 && !millsFormed.white.some((mill) => mill.includes(index)) ? index : -1,
-        ).filter((index) => index !== -1);
+/** Board as the engine sees it (0 empty, 1 White, 2 Black). */
+function engineBoard(match: Match): Int8Array {
+    const board = new Int8Array(24);
+    for (let i = 0; i < 24; i++) {
+        if (match.state.B0[i] === 1) board[i] = 1;
+        else if (match.state.B1[i] === 1) board[i] = 2;
     }
+    return board;
+}
+
+/**
+ * Opponent cows `player` may capture: any cow that is not in a (current) mill,
+ * or any cow at all if every one of them is in a mill.
+ */
+export const GenerateLegalCaptures = (match: Match, player: Binary): number[] => {
+    if (!match?.state) return [];
+    return capturablePoints(engineBoard(match), player === 0 ? 1 : 0);
 };
+
+/** Snapshot of the arena match in the training engine's format (start of a turn). */
+export function matchToEngineState(match: Match): GameState {
+    return fromBitboards(
+        match.state.B0,
+        match.state.B1,
+        [match.White.placingCows, match.Black.placingCows],
+        match.state.Player,
+    );
+}
 
 export const GenerateLegalMoves = (match: Match, player: Binary): Movement[] => {
     const state = match?.state;
-    const Remaining = match.getAgent(player).Remaining();
-    const canPlace = match.getAgent(player).canPlace();
-
+    const agent = match.getAgent(player);
     const B0 = state.B0;
     const B1 = state.B1;
-
+    const own = player === 0 ? B0 : B1;
     const legalMoves: Movement[] = [];
 
-    if (state.getPhase() === "Placing") {
+    // Still has cows in hand: place on any empty point (encoded as from === to).
+    if (agent.canPlace()) {
         for (let i = 0; i < 24; i++) {
-            if (B0[i] === 0 && B1[i] === 0) {
-                legalMoves.push({
-                    from: i,
-                    to: i,
-                });
-            }
+            if (B0[i] === 0 && B1[i] === 0) legalMoves.push({ from: i, to: i });
         }
-
         return legalMoves;
     }
 
-    const currentPlayer = state.getPlayer();
-    const isWhite = currentPlayer === "White";
-
-    const currentBoard = isWhite ? B0 : B1;
-    const opponentBoard = isWhite ? B1 : B0;
-
-    if (state.getPhase() === "Moving") {
-        if (canPlace) {
-            for (let i = 0; i < 24; i++) {
-                if (B0[i] === 0 && B1[i] === 0) {
-                    legalMoves.push({
-                        from: i,
-                        to: i,
-                    });
-                }
-            }
-        } else {
-            for (let from = 0; from < 24; from++) {
-                if (currentBoard[from] !== 1) continue;
-
-                for (const to of ADJACENT_POINTS[from]) {
-                    const isEmpty = currentBoard[to] === 0 && opponentBoard[to] === 0;
-
-                    if (isEmpty) {
-                        legalMoves.push({ from, to });
-                    }
-                }
-            }
+    // Exactly 3 cows left: may fly anywhere. Otherwise move to an adjacent point.
+    const flying = agent.Remaining() <= 3;
+    for (let from = 0; from < 24; from++) {
+        if (own[from] !== 1) continue;
+        const targets = flying ? [...Array(24).keys()] : ADJACENT_POINTS[from];
+        for (const to of targets) {
+            if (B0[to] === 0 && B1[to] === 0) legalMoves.push({ from, to });
         }
-
-        return legalMoves;
     }
-
-    if (state.getPhase() === "Flying") {
-        if (Remaining <= 3) {
-            for (let from = 0; from < 24; from++) {
-                if (currentBoard[from] !== 1) continue;
-
-                for (let to = 0; to < 24; to++) {
-                    const isEmpty = currentBoard[to] === 0 && opponentBoard[to] === 0;
-
-                    if (isEmpty) {
-                        legalMoves.push({ from, to });
-                    }
-                }
-            }
-        } else {
-            for (let from = 0; from < 24; from++) {
-                if (currentBoard[from] !== 1) continue;
-
-                // Only check positions adjacent to 'from'
-                for (const to of ADJACENT_POINTS[from]) {
-                    const isEmpty = currentBoard[to] === 0 && opponentBoard[to] === 0;
-
-                    if (isEmpty) {
-                        legalMoves.push({ from, to });
-                    }
-                }
-            }
-        }
-
-        return legalMoves;
-    }
-
     return legalMoves;
 };
 
-export function BasicHeuristic(match: Match): number {
-    // H(s)=wp​P(s)+wm​M(s)+wt​T(s)+wo​O(s)
+type MinimaxMove = {
+    move: Movement;
+    capture: number;
+};
 
-    const state = match.state;
-
-    const Ps = state.B0Remaining - state.B1Remaining;
-    const wP = 1;
-    const Ms = match.numMillsFormed("White") - match.numMillsFormed("Black");
-    const wM = 10;
-    const Os = GenerateLegalMoves(match, 0).length - GenerateLegalMoves(match, 1).length;
-    const wO = 0;
-
-    return wP * Ps + wM * Ms + wO * Os;
+/*
+ * Minimax / alpha-beta for the arena run on the fast training engine
+ * (src/rl/engine.ts) with its heuristic (material, mills, open twos,
+ * mobility). Searching through copyMatch() was far too slow at depth 3
+ * once the search correctly plays the opponent's replies.
+ */
+function engineSearch(match: Match, depth: number, prune: boolean): MinimaxMove {
+    const state = matchToEngineState(match);
+    const action = new AlphaBetaAgent(depth, undefined, prune).selectAction(state, Math.random);
+    if (!action) return { move: { from: -1, to: -1 }, capture: -1 };
+    const from = action.from < 0 ? action.to : action.from; // arena encodes a placement as from === to
+    return { move: { from, to: action.to }, capture: action.capture };
 }
 
 export function AlphaBeta(match: Match, depth: number): MinimaxMove {
-    const player = match.state.Player;
-    const legalMoves = GenerateLegalMoves(match, player);
+    return engineSearch(match, depth, true);
+}
 
-    if (legalMoves.length === 0) {
-        return {
-            move: {
-                from: -1,
-                to: -1,
-            },
-            capture: -1,
-        };
-    }
-
-    let bestMove = legalMoves[0];
-    let bestCapture = -1;
-
-    if (player === 0) {
-        let bestValue = -Infinity;
-        let alpha = -Infinity;
-        const beta = Infinity;
-
-        for (const move of legalMoves) {
-            const matchCopy = copyMatch(match);
-
-            matchCopy.doMoveOrCapture(move, -1);
-
-            if (matchCopy.mill.length > 0) {
-                const captures = matchCopy.White.GenerateLegalCaptures(
-                    matchCopy.state,
-                    matchCopy.millsFormed.black,
-                );
-
-                for (const capture of captures) {
-                    const captureMatch = copyMatch(matchCopy);
-
-                    captureMatch.doMoveOrCapture(move, capture);
-
-                    const value = alphaBeta(captureMatch, depth - 1, false, alpha, beta);
-
-                    if (value > bestValue) {
-                        bestValue = value;
-                        bestMove = move;
-                        bestCapture = capture;
-                    }
-
-                    alpha = Math.max(alpha, bestValue);
-
-                    if (beta <= alpha) {
-                        break;
-                    }
-                }
-            } else {
-                const value = alphaBeta(matchCopy, depth - 1, false, alpha, beta);
-
-                if (value > bestValue) {
-                    bestValue = value;
-                    bestMove = move;
-                    bestCapture = -1;
-                }
-
-                alpha = Math.max(alpha, bestValue);
-
-                if (beta <= alpha) {
-                    break;
-                }
-            }
-        }
-    } else {
-        let bestValue = Infinity;
-        const alpha = -Infinity;
-        let beta = Infinity;
-
-        for (const move of legalMoves) {
-            const matchCopy = copyMatch(match);
-
-            matchCopy.doMoveOrCapture(move, -1);
-
-            if (matchCopy.mill.length > 0) {
-                const captures = matchCopy.White.GenerateLegalCaptures(
-                    matchCopy.state,
-                    matchCopy.millsFormed.white,
-                );
-
-                for (const capture of captures) {
-                    const captureMatch = copyMatch(matchCopy);
-
-                    captureMatch.doMoveOrCapture(move, capture);
-
-                    const value = alphaBeta(captureMatch, depth - 1, true, alpha, beta);
-
-                    if (value < bestValue) {
-                        bestValue = value;
-                        bestMove = move;
-                        bestCapture = capture;
-                    }
-
-                    beta = Math.min(beta, bestValue);
-
-                    if (beta <= alpha) {
-                        break;
-                    }
-                }
-            } else {
-                const value = alphaBeta(matchCopy, depth - 1, true, alpha, beta);
-
-                if (value < bestValue) {
-                    bestValue = value;
-                    bestMove = move;
-                    bestCapture = -1;
-                }
-
-                beta = Math.min(beta, bestValue);
-
-                if (beta <= alpha) {
-                    break;
-                }
-            }
-        }
-    }
-
-    return {
-        move: bestMove,
-        capture: bestCapture,
-    };
+export function Minimaxmove(match: Match, depth: number): MinimaxMove {
+    return engineSearch(match, depth, false);
 }
 
 export function getRandomMove(match: Match): Movement {
@@ -389,490 +225,6 @@ export function getRandomCapture(match: Match): number {
     const randomIndex = Math.floor(Math.random() * legalCaptures.length);
     return legalCaptures[randomIndex];
 }
-
-function nextMatches(match: Match, player: Binary): Match[] {
-    const legalMoves = GenerateLegalMoves(match, player);
-
-    const nextMatches: Match[] = [];
-
-    legalMoves.forEach((move) => {
-        const matchCopy = copyMatch(match);
-
-        matchCopy.doMove(move);
-
-        nextMatches.push(matchCopy);
-    });
-
-    return nextMatches;
-}
-
-function Value(match: Match): number {
-    const state = match.state;
-    return match.getCurrentPlayerAgent().network.predict(state);
-}
-
-type MinimaxMove = {
-    move: Movement;
-    capture: number;
-};
-
-function minimax(match: Match, depth: number, maximizing: boolean): number {
-
-    if (depth === 0) {
-        return BasicHeuristic(match);
-    }
-
-    const player: Binary = maximizing ? 0 : 1;
-    const legalMoves = GenerateLegalMoves(match, player);
-
-    if (legalMoves.length === 0) {
-        return BasicHeuristic(match);
-    }
-
-    if (maximizing) {
-        let bestValue = -Infinity;
-
-        for (const move of legalMoves) {
-            const matchCopy = copyMatch(match);
-
-            matchCopy.doMoveOrCapture(move, -1);
-
-            if (matchCopy.mill.length > 0) {
-                const captures = matchCopy.White.GenerateLegalCaptures(
-                    matchCopy.state,
-                    matchCopy.millsFormed.black,
-                );
-
-                for (const capture of captures) {
-                    const captureMatch = copyMatch(matchCopy);
-
-                    captureMatch.doMoveOrCapture(move, capture);
-
-                    const value = minimax(captureMatch, depth - 1, false);
-
-                    bestValue = Math.max(bestValue, value);
-                }
-            } else {
-                const value = minimax(matchCopy, depth - 1, false);
-
-                bestValue = Math.max(bestValue, value);
-            }
-        }
-
-        return bestValue;
-    } else {
-        let bestValue = Infinity;
-
-        for (const move of legalMoves) {
-            const matchCopy = copyMatch(match);
-
-            matchCopy.doMoveOrCapture(move, -1);
-
-            if (matchCopy.mill.length > 0) {
-                const captures = matchCopy.Black.GenerateLegalCaptures(
-                    matchCopy.state,
-                    matchCopy.millsFormed.white,
-                );
-
-                for (const capture of captures) {
-                    const captureMatch = copyMatch(matchCopy);
-
-                    captureMatch.doMoveOrCapture(move, capture);
-
-                    const value = minimax(captureMatch, depth - 1, true);
-
-                    bestValue = Math.min(bestValue, value);
-                }
-            } else {
-                const value = minimax(matchCopy, depth - 1, true);
-
-                bestValue = Math.min(bestValue, value);
-            }
-        }
-
-        return bestValue;
-    }
-}
-
-export function Minimaxmove(match: Match, depth: number): MinimaxMove {
-    const player = match.state.Player;
-    const legalMoves = GenerateLegalMoves(match, player);
-    if (legalMoves.length === 0) {
-        return {
-            move: {
-                from: -1,
-                to: -1,
-            },
-            capture: -1,
-        };
-    }
-
-    let bestMove = legalMoves[0];
-    let bestCapture = -1;
-
-    if (player === 0) {
-        let bestValue = -Infinity;
-        for (const move of legalMoves) {
-            const matchCopy = copyMatch(match);
-            matchCopy.doMoveOrCapture(move, -1);
-            if (matchCopy.mill.length > 0) {
-                const captures = matchCopy.White.GenerateLegalCaptures(
-                    matchCopy.state,
-                    matchCopy.millsFormed.black,
-                );
-                for (const capture of captures) {
-                    const captureMatch = copyMatch(matchCopy);
-                    captureMatch.doMoveOrCapture(move, capture);
-
-                    const value = minimax(captureMatch, depth - 1, false);
-
-                    if (value > bestValue) {
-                        bestValue = value;
-                        bestMove = move;
-                        bestCapture = capture;
-                    }
-                }
-            } else {
-                const value = minimax(matchCopy, depth - 1, false);
-
-                if (value > bestValue) {
-                    bestValue = value;
-                    bestMove = move;
-                    bestCapture = -1;
-                }
-            }
-        }
-    } else {
-        let bestValue = Infinity;
-
-        for (const move of legalMoves) {
-            const matchCopy = copyMatch(match);
-
-            matchCopy.doMoveOrCapture(move, -1);
-
-            if (matchCopy.mill.length > 0) {
-                const captures = matchCopy.Black.GenerateLegalCaptures(
-                    matchCopy.state,
-                    matchCopy.millsFormed.white,
-                );
-
-                for (const capture of captures) {
-                    const captureMatch = copyMatch(matchCopy);
-
-                    captureMatch.doMoveOrCapture(move, capture);
-
-                    const value = minimax(captureMatch, depth - 1, true);
-
-                    if (value < bestValue) {
-                        bestValue = value;
-                        bestMove = move;
-                        bestCapture = capture;
-                    }
-                }
-            } else {
-                const value = minimax(matchCopy, depth - 1, true);
-
-                if (value < bestValue) {
-                    bestValue = value;
-                    bestMove = move;
-                    bestCapture = -1;
-                }
-            }
-        }
-    }
-
-    return {
-        move: bestMove,
-        capture: bestCapture,
-    };
-}
-
-function alphaBeta(
-    match: Match,
-    depth: number,
-    maximizing: boolean,
-    alpha: number,
-    beta: number,
-): number {
-    if (depth === 0) {
-        return BasicHeuristic(match);
-    }
-
-    const player: Binary = maximizing ? 0 : 1;
-    const legalMoves = GenerateLegalMoves(match, player);
-
-    if (legalMoves.length === 0) {
-        return BasicHeuristic(match);
-    }
-
-    if (maximizing) {
-        let bestValue = -Infinity;
-
-        for (const move of legalMoves) {
-            const matchCopy = copyMatch(match);
-
-            matchCopy.doMoveOrCapture(move, -1);
-
-            if (matchCopy.mill.length > 0) {
-                const captures = matchCopy.White.GenerateLegalCaptures(
-                    matchCopy.state,
-                    matchCopy.millsFormed.black,
-                );
-
-                for (const capture of captures) {
-                    const captureMatch = copyMatch(matchCopy);
-
-                    captureMatch.doMoveOrCapture(move, capture);
-
-                    const value = alphaBeta(captureMatch, depth - 1, false, alpha, beta);
-
-                    bestValue = Math.max(bestValue, value);
-                    alpha = Math.max(alpha, bestValue);
-
-                    if (beta <= alpha) {
-                        break;
-                    }
-                }
-            } else {
-                const value = alphaBeta(matchCopy, depth - 1, false, alpha, beta);
-
-                bestValue = Math.max(bestValue, value);
-                alpha = Math.max(alpha, bestValue);
-            }
-
-            if (beta <= alpha) {
-                break;
-            }
-        }
-
-        return bestValue;
-    } else {
-        let bestValue = Infinity;
-
-        for (const move of legalMoves) {
-            const matchCopy = copyMatch(match);
-
-            matchCopy.doMoveOrCapture(move, -1);
-
-            if (matchCopy.mill.length > 0) {
-                const captures = matchCopy.Black.GenerateLegalCaptures(
-                    matchCopy.state,
-                    matchCopy.millsFormed.white,
-                );
-
-                for (const capture of captures) {
-                    const captureMatch = copyMatch(matchCopy);
-
-                    captureMatch.doMoveOrCapture(move, capture);
-
-                    const value = alphaBeta(captureMatch, depth - 1, true, alpha, beta);
-
-                    bestValue = Math.min(bestValue, value);
-                    beta = Math.min(beta, bestValue);
-
-                    if (beta <= alpha) {
-                        break;
-                    }
-                }
-            } else {
-                const value = alphaBeta(matchCopy, depth - 1, true, alpha, beta);
-
-                bestValue = Math.min(bestValue, value);
-                beta = Math.min(beta, bestValue);
-            }
-
-            if (beta <= alpha) {
-                break;
-            }
-        }
-
-        return bestValue;
-    }
-}
-
-export function V(
-    network: NeuralNetwork,
-    match: Match,
-): number {
-    return network.predict(match.state);
-}
-
-export const chooseTDMove = (
-    network: NeuralNetwork,
-    match: Match,
-    player: Binary,
-    epsilon: number = 0.1,
-): [number, Movement] => {
-
-    if(match.getCurrentPlayerAgent().mode==0){
-        if(epsilon>Math.random()){
-            const randomMove = getRandomMove(match);
-            const randomCapture = getRandomCapture(match);
-            return [randomCapture, randomMove];
-        }
-    }
-
-    const legalMoves = GenerateLegalMoves(match, player);
-    const actionvalues: { move: Movement; capture: number; value: number }[] = [];
-
-    let bestMove = legalMoves[0];
-    let bestCapture = -1;
-
-    let bestValue: number;
-
-    const firstMatchCopy = copyMatch(match);
-
-    firstMatchCopy.doMoveOrCapture(
-        bestMove,
-        -1,
-    );
-
-    const firstCaptures =
-        GenerateLegalCaptures(firstMatchCopy, player);
-
-    if (firstCaptures.length === 0) {
-
-        bestValue = V(network, firstMatchCopy);
-        actionvalues.push({
-            move: bestMove,
-            capture: -1,
-            value: bestValue,
-        });
-
-    } else {
-
-        const firstCapture =
-            firstCaptures[0];
-
-        const captureMatchCopy = copyMatch(firstMatchCopy);
-
-        captureMatchCopy.doMoveOrCapture(bestMove, firstCapture);
-
-        bestValue = V(network, captureMatchCopy);
-
-        bestCapture = firstCapture;
-        actionvalues.push({
-            move: bestMove,
-            capture: bestCapture,
-            value: bestValue,
-        });
-    }
-
-    /*
-     * Evaluate every other legal move.
-     */
-    for (let i = 1; i < legalMoves.length; i++) {
-
-        const move = legalMoves[i];
-
-        const matchCopy = copyMatch(match);
-
-        /*
-         * First make the movement.
-         */
-        matchCopy.doMoveOrCapture(move, -1);
-
-        /*
-         * Now check whether a capture is available.
-         */
-        const captures = GenerateLegalCaptures(matchCopy, player);
-
-        /*
-         * No capture required.
-         */
-        if (captures.length === 0) {
-
-            const value = V(network, matchCopy);
-
-            actionvalues.push({
-                move: move,
-                capture: -1,
-                value: value,
-            });
-
-            if (value >= bestValue) {
-                bestValue = value;
-                bestMove = move;
-                bestCapture = -1;
-            }
-
-            continue;
-        }
-
-        /*
-         * A mill was formed.
-         *
-         * We must consider every legal capture.
-         */
-        for (let j = 0; j < captures.length; j++) {
-            const captureMatchCopy = copyMatch(matchCopy);
-
-            const capture = captures[j];
-            captureMatchCopy.doMoveOrCapture(move, capture);
-
-            const value = V(network, captureMatchCopy);           
-
-            if (value >= bestValue) {
-                bestValue = value;
-                bestMove = move;
-                bestCapture = capture;
-            }
-
-            actionvalues.push({
-                move: move,
-                capture: capture,
-                value: value,
-            });
-        }
-    }
-    return [bestCapture, bestMove];
-};
-
-export function makeTDTrainingMove(
-    network: NeuralNetwork,
-    match: Match,
-    gamma: number,
-    alpha: number,
-    selectedMove?: [number, Movement],
-): number {
-
-    const currentState = match.state;
-
-    const player = currentState.Player;
-    
-
-    const [capture, move] = selectedMove ?? chooseTDMove(network, match, player);
-
-    if (move === null) {
-        return 0;
-    }
-
-    const matchCopy = copyMatch(match);
-
-    matchCopy.doMoveOrCapture(move, -1);
-    matchCopy.doMoveOrCapture(move, capture);
-
-    const nextState = matchCopy.state;
-    const terminal = matchCopy.isGameOver();
-
-    let reward = matchCopy.mill.length > 0 ? 1 : -1;
-
-    if (matchCopy.winner !== null) {
-        reward = matchCopy.winner === player ? 5 : 0;
-    }
-
-    const tdError = network.tdZeroUpdate(
-        currentState,
-        nextState,
-        reward,
-        gamma,
-        alpha,
-        terminal,
-    );
-
-    return tdError;
-}
-
 
 export function copyMatch(match: Match): Match {
     const matchCopy = Object.create(Object.getPrototypeOf(match)) as Match;

@@ -30,3 +30,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# RL experiment logs
+results/logs/
+results/*/weights.json
+results/*/best-weights.json

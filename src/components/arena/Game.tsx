@@ -6,10 +6,33 @@ import {
     getRandomMove,
     getRandomCapture,
     Minimaxmove,
-    chooseTDMove,
-    makeTDTrainingMove
+    matchToEngineState,
 } from "../../utilities/helperFunctions";
 import { NeuralNetwork } from "./neuralNetwork";
+import { TDAgent } from "@/rl/agents";
+
+/** Max full moves before the arena calls a draw (stops endless shuffling). */
+export const MAX_ARENA_MOVES = 200;
+
+/*
+ * One network per colour, shared across episodes, so training carries over
+ * from game to game without reloading (and leaking) a new model every match.
+ */
+const sharedNetworks = new Map<string, NeuralNetwork>();
+
+function getSharedNetwork(key: string): NeuralNetwork {
+    let net = sharedNetworks.get(key);
+    if (!net) {
+        net = new NeuralNetwork();
+        const created = net;
+        if (!created.loadFromLocalStorage(key)) {
+            // Nothing trained in this browser yet: start from the shipped weights.
+            void created.loadPretrained();
+        }
+        sharedNetworks.set(key, created);
+    }
+    return net;
+}
 
 export type Binary = 0 | 1;
 export type AgentMode = 0 | 1;
@@ -127,7 +150,7 @@ class Agent {
     placingCows: number;
     public Cows: number;
     public network: NeuralNetwork;
-    private networkWeights: number[] | null;
+    public td: TDAgent;
 
     constructor(Player: Binary, mode: AgentMode, algorithm: string) {
         this.name = algorithm;
@@ -135,9 +158,22 @@ class Agent {
         this.mode = mode;
         this.Cows = 12;
         this.placingCows = 12;
-        this.network = new NeuralNetwork();
-        this.network.loadFromLocalStorage(Agent.getNetworkStorageKey(Player));
-        this.networkWeights = this.network.getWeightsAsArray();
+        this.network = getSharedNetwork(Agent.getNetworkStorageKey(Player));
+        // Training: explore 10% of the time and learn. Playing: greedy, no learning.
+        this.td = new TDAgent(this.network, {
+            learn: mode === 0,
+            epsilon: mode === 0 ? 0.1 : 0,
+        });
+        this.td.startGame(Player);
+    }
+
+    /** Final TD update for this agent once the game is decided. */
+    public finishGame(match: Match): void {
+        if (this.name !== "Standard" && this.name !== "TD") return;
+        if (this.mode !== 0) return;
+        const final = matchToEngineState(match);
+        final.result = match.winner === null ? 2 : match.winner;
+        this.td.endGame(final);
     }
 
     private static getNetworkStorageKey(player: Binary): string {
@@ -148,7 +184,7 @@ class Agent {
     public saveTrainingNetwork(): void {
         
         if (this.mode !== 0) return;
-        // this.network.printChangedWeights(this.networkWeights ?? []);
+        if (this.name !== "Standard" && this.name !== "TD") return;
         this.network.saveToLocalStorage(Agent.getNetworkStorageKey(this.Player));
     }
 
@@ -189,13 +225,11 @@ class Agent {
         }
 
         if (this.name === "Standard" || this.name === "TD") {
-            const [capture, move] = chooseTDMove(this.network, match, this.Player);
-
-            if (this.mode === 0) {
-                makeTDTrainingMove(this.network, match, 0.9, 0.1, [capture, move]);
-            }
-
-            return [capture, move];
+            // Pick the move whose resulting position the network values most
+            // (and, in training mode, do the TD(0) update for the previous move).
+            const action = this.td.selectAction(matchToEngineState(match), Math.random);
+            const from = action.from < 0 ? action.to : action.from; // arena encodes a placement as from === to
+            return [action.capture, { from, to: action.to }];
         }
         if (match.mill.length > 0) {
             Capture = getRandomCapture(match);
@@ -397,27 +431,32 @@ export class Match {
         return this.lastMove;
     }
 
-    public isGameOver(): boolean {
-        if (this.White.Remaining() < 3 || this.Black.Remaining() < 3) {
-            this.winner = this.White.Remaining() < 3 ? 1 : 0;
-            if (!this.trainingNetworksSaved) {
-                this.White.saveTrainingNetwork();
-                this.Black.saveTrainingNetwork();
-                this.trainingNetworksSaved = true;
-            }
-            return true;
+    private endGame(winner: Binary | null): boolean {
+        this.winner = winner;
+        if (!this.trainingNetworksSaved) {
+            this.White.finishGame(this);
+            this.Black.finishGame(this);
+            this.White.saveTrainingNetwork();
+            this.Black.saveTrainingNetwork();
+            this.trainingNetworksSaved = true;
         }
-        if (this.White.placingCows === 0 && this.Black.placingCows === 0) {
-            const whiteMoves = GenerateLegalMoves(this, 0);
-            const blackMoves = GenerateLegalMoves(this, 1);
-            if (whiteMoves.length === 0 && blackMoves.length === 0) {
-                this.winner = null; // Draw
-                if (!this.trainingNetworksSaved) {
-                    this.White.saveTrainingNetwork();
-                    this.Black.saveTrainingNetwork();
-                    this.trainingNetworksSaved = true;
-                }
-                return true;
+        return true;
+    }
+
+    public isGameOver(): boolean {
+        if (this.trainingNetworksSaved) return true;
+        if (this.White.Remaining() < 3 || this.Black.Remaining() < 3) {
+            return this.endGame(this.White.Remaining() < 3 ? 1 : 0);
+        }
+        // Only judge at the start of a turn (not between a move and its capture).
+        if (this.isMove) {
+            const toMove = this.state.Player;
+            if (GenerateLegalMoves(this, toMove).length === 0) {
+                // A player who cannot move loses.
+                return this.endGame(toMove === 0 ? 1 : 0);
+            }
+            if (this.moveCounter() >= MAX_ARENA_MOVES) {
+                return this.endGame(null); // draw
             }
         }
         return false;

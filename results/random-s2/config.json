@@ -1,0 +1,22 @@
+{
+  "name": "random-s2",
+  "opponent": "random",
+  "episodes": 5000,
+  "evalEvery": 250,
+  "evalGames": 40,
+  "evalVs": [
+    "random",
+    "ab1",
+    "ab2"
+  ],
+  "alpha": 0.01,
+  "gamma": 0.99,
+  "epsilon": 0.1,
+  "captureReward": 0.05,
+  "hidden": [
+    64,
+    64
+  ],
+  "activation": "relu",
+  "seed": 2
+}
