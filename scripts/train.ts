@@ -22,11 +22,7 @@ import { ValueNet } from "../src/rl/valueNet";
 import { Agent, AlphaBetaAgent, RandomAgent, SearchTDAgent, TDAgent, outcomeFor } from "../src/rl/agents";
 import { evaluate, playGame } from "../src/rl/play";
 import { initialState, legalActions, applyAction } from "../src/rl/engine";
-
-function arg(name: string, def: string): string {
-    const i = process.argv.indexOf(`--${name}`);
-    return i >= 0 && process.argv[i + 1] !== undefined ? process.argv[i + 1] : def;
-}
+import { arg, list, reportConfig } from "./cli";
 
 const cfg = {
     name: arg("name", `run-${Date.now()}`),
@@ -34,7 +30,7 @@ const cfg = {
     episodes: +arg("episodes", "2000"),
     evalEvery: +arg("eval-every", "100"),
     evalGames: +arg("eval-games", "40"),
-    evalVs: arg("eval-vs", "random,ab1,ab2").split(","),
+    evalVs: list("eval-vs", "random,ab1,ab2"),
     alpha: +arg("alpha", "0.01"),
     /** Linearly decayed to this by the last episode. Defaults to no decay. */
     alphaFinal: +arg("alpha-final", arg("alpha", "0.01")),
@@ -45,10 +41,12 @@ const cfg = {
     captureReward: +arg("capture-reward", "0.05"),
     /** Search depth used for move selection while training (1 = greedy). */
     searchDepth: +arg("search-depth", "1"),
-    hidden: arg("hidden", "64,64").split(",").map(Number),
+    hidden: list("hidden", "64,64").map(Number),
     activation: arg("activation", "relu") as "relu" | "tanh",
     seed: +arg("seed", "1"),
 };
+
+reportConfig(cfg as unknown as Record<string, unknown>);
 
 const outDir = path.join("results", cfg.name);
 fs.mkdirSync(outDir, { recursive: true });

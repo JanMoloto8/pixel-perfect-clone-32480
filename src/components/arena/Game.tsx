@@ -13,7 +13,14 @@ import { Algorithm } from "@/types/Algorithm";
 
 /** Max full moves before the arena calls a draw (stops endless shuffling). */
 export const MAX_ARENA_MOVES = 200;
-/** Plies of lookahead for Algorithm.TD_SEARCH. 2 is fast enough for the UI. */
+/**
+ * Plies of lookahead for Algorithm.TD_SEARCH.
+ *
+ * 2 is the safe default: a few hundred ms per move, and it already quadruples
+ * the score against alpha-beta d2 versus greedy. Depth 3 is far stronger
+ * (0.545 vs alpha-beta d2, beating it outright) but costs 0.2-0.4 s per move
+ * headless and more in a browser, so raise this only if the UI can wait.
+ */
 export const ARENA_SEARCH_DEPTH = 2;
 
 /*

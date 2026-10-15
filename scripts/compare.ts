@@ -16,18 +16,14 @@ import { mulberry32 } from "../src/rl/engine";
 import { ValueNet } from "../src/rl/valueNet";
 import { Agent, AlphaBetaAgent, RandomAgent, SearchTDAgent, TDAgent } from "../src/rl/agents";
 import { evaluate } from "../src/rl/play";
+import { arg, flag, list, reportConfig } from "./cli";
 
-function arg(name: string, def: string): string {
-    const i = process.argv.indexOf(`--${name}`);
-    return i >= 0 && process.argv[i + 1] !== undefined ? process.argv[i + 1] : def;
-}
-
-const runs = arg("runs", "").split(",").filter(Boolean);
+const runs = list("runs", "");
 /** Optional subset of runs to use as the row agent (lets you split the work over processes). */
-const rows = arg("rows", "").split(",").filter(Boolean);
+const rows = list("rows", "");
 const games = +arg("games", "100");
-const baselines = arg("baselines", "random,ab1,ab2,ab3").split(",").filter(Boolean);
-const useFinal = process.argv.includes("--final");
+const baselines = list("baselines", "random,ab1,ab2,ab3");
+const useFinal = flag("final");
 /** Random plies at the start of every game so greedy agents don't replay the same game. */
 const opening = +arg("opening", "4");
 const rng = mulberry32(+arg("seed", "7"));
@@ -37,6 +33,8 @@ const rng = mulberry32(+arg("seed", "7"));
  * Pass e.g. --search-depth 2 to play the same learned V through a 2-ply search.
  */
 const searchDepth = +arg("search-depth", "1");
+
+reportConfig({ runs, rows, games, baselines, searchDepth, useFinal, opening });
 
 const players: { name: string; agent: Agent }[] = [];
 for (const run of runs) {

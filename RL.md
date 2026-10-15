@@ -92,26 +92,30 @@ weights are identical, only move selection changes. Depth 1 reduces exactly to
 the greedy agent (verified move-for-move in the test suite), so the depth rows
 are directly comparable.
 
-Mean score over 2 seeds, 100–150 games per pairing:
+The shipped self-play model, played at each depth, 100 games per pairing
+(`npm run rl:search`, scores are (wins + ½ draws)/games with standard errors):
 
-| agent | search | vs random | vs AB d1 | vs AB d2 | vs AB d3 |
+| search depth | vs random | vs AB d1 | vs AB d2 | vs AB d3 | sec/game |
 |---|---|---|---|---|---|
-| TD(0) self-play | greedy (d1) | 0.964 | 0.268 | 0.045 | 0.014 |
-| TD(0) self-play | **d2** | 0.993 | **0.558** | **0.255** | 0.058 |
-| TD(λ) self-play | greedy (d1) | 0.972 | 0.232 | 0.065 | 0.015 |
-| TD(λ) self-play | d2 | 0.983 | 0.508 | 0.160 | 0.053 |
+| 1 (greedy) | 0.990 ±0.010 | 0.250 ±0.043 | 0.050 ±0.022 | 0.020 ±0.014 | 0.02–0.06 |
+| 2 | 1.000 ±0.000 | 0.475 ±0.050 | 0.210 ±0.041 | 0.055 ±0.023 | 0.2–1.4 |
+| **3** | 1.000 ±0.000 | **0.860** ±0.035 | **0.545** ±0.050 | **0.245** ±0.043 | 12–38 |
 
-Against alpha-beta depth 1 the score roughly doubles (0.268 → 0.558); against
-depth 2 it rises about fivefold (0.045 → 0.255). Both are far outside the
-standard error (roughly 0.035–0.05 per cell), so this is a real effect and not
-seed luck. Depth 3 alpha-beta is still winning, but it is no longer a shutout.
+Depth 2 roughly doubles the score against alpha-beta depth 1 and quadruples it
+against depth 2. Depth 3 is the real jump: **it beats alpha-beta depth 2
+outright** (0.545 > 0.5) and takes 0.245 off depth 3, up from 0.020 greedy.
+Every step is many standard errors clear of the one below it.
 
-The cost is about 10–20x more time per move (0.03 s/game greedy, 0.3–1.7 s/game
-at depth 2), which is still fast enough for the browser arena.
+Cross-checked on two seeds of separately trained weights at depth 2
+(`results/summary/search_vs_greedy.csv`), which agrees: TD(0) self-play goes
+from 0.268 to 0.558 against depth 1 and 0.045 to 0.255 against depth 2.
 
 **Conclusion: the gap was a search problem, not a learning problem.** The learned
-value function was reasonable all along; selecting greedily from one ply threw
-most of its value away.
+value function was good enough all along; selecting greedily from one ply threw
+most of its value away. No weights were retrained to produce any row above.
+
+The cost is real — depth 3 is roughly 500x the time per move of greedy — so the
+browser arena uses depth 2 by default (`ARENA_SEARCH_DEPTH` in `Game.tsx`).
 
 ### Arena bug found along the way
 

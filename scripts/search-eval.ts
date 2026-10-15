@@ -14,18 +14,16 @@ import { mulberry32, initialState, legalActions, applyAction } from "../src/rl/e
 import { ValueNet } from "../src/rl/valueNet";
 import { Agent, AlphaBetaAgent, RandomAgent, SearchTDAgent, TDAgent } from "../src/rl/agents";
 import { evaluate } from "../src/rl/play";
-
-function arg(name: string, def: string): string {
-    const i = process.argv.indexOf(`--${name}`);
-    return i >= 0 && process.argv[i + 1] !== undefined ? process.argv[i + 1] : def;
-}
+import { arg, list, reportConfig } from "./cli";
 
 const weightsFile = arg("weights", "public/models/td-agent.json");
 const games = +arg("games", "100");
-const depths = arg("depths", "1,2,3").split(",").map(Number);
-const baselines = arg("baselines", "random,ab1,ab2,ab3").split(",").filter(Boolean);
+const depths = list("depths", "1,2,3").map(Number);
+const baselines = list("baselines", "random,ab1,ab2,ab3");
 const opening = +arg("opening", "4");
 const out = arg("out", "results/summary/search_eval.csv");
+
+reportConfig({ weights: weightsFile, games, depths, baselines, opening, out });
 
 const net = new ValueNet();
 const raw = JSON.parse(fs.readFileSync(weightsFile, "utf8"));
