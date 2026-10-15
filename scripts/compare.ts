@@ -14,7 +14,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { mulberry32 } from "../src/rl/engine";
 import { ValueNet } from "../src/rl/valueNet";
-import { Agent, AlphaBetaAgent, RandomAgent, TDAgent } from "../src/rl/agents";
+import { Agent, AlphaBetaAgent, RandomAgent, SearchTDAgent, TDAgent } from "../src/rl/agents";
 import { evaluate } from "../src/rl/play";
 
 function arg(name: string, def: string): string {
@@ -32,12 +32,25 @@ const useFinal = process.argv.includes("--final");
 const opening = +arg("opening", "4");
 const rng = mulberry32(+arg("seed", "7"));
 
+/**
+ * Search depth for the trained agents' move selection. 1 = greedy over V.
+ * Pass e.g. --search-depth 2 to play the same learned V through a 2-ply search.
+ */
+const searchDepth = +arg("search-depth", "1");
+
 const players: { name: string; agent: Agent }[] = [];
 for (const run of runs) {
     const file = path.join("results", run, useFinal ? "weights.json" : "best-weights.json");
     const net = new ValueNet();
-    if (!net.loadJSON(JSON.parse(fs.readFileSync(file, "utf8")))) throw new Error(`could not load ${file}`);
-    players.push({ name: run, agent: new TDAgent(net, { epsilon: 0, learn: false }, run) });
+    const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!net.loadJSON(raw.weights ?? raw)) throw new Error(`could not load ${file}`);
+    const label = searchDepth > 1 ? `${run}+d${searchDepth}` : run;
+    players.push({
+        name: label,
+        agent: searchDepth > 1
+            ? new SearchTDAgent(net, searchDepth, label)
+            : new TDAgent(net, { epsilon: 0, learn: false }, label),
+    });
 }
 const opponents: { name: string; agent: Agent }[] = [
     ...baselines.map((b) => ({
@@ -49,7 +62,8 @@ const opponents: { name: string; agent: Agent }[] = [
 
 const out = path.join("results", arg("out", "compare.csv"));
 fs.writeFileSync(out, "agent,opponent,games,wins,draws,losses,score,avg_plies\n");
-for (const p of players.filter((x) => rows.length === 0 || rows.includes(x.name))) {
+// --rows accepts the run name with or without the "+dN" search suffix.
+for (const p of players.filter((x) => rows.length === 0 || rows.includes(x.name) || rows.includes(x.name.split("+")[0]))) {
     for (const o of opponents) {
         if (o.name === p.name) continue;
         const r = evaluate(p.agent, o.agent, games, rng, undefined, opening);

@@ -19,7 +19,7 @@ import * as path from "node:path";
 import { mulberry32 } from "../src/rl/engine";
 import { encode, FEATURE_SIZE } from "../src/rl/features";
 import { ValueNet } from "../src/rl/valueNet";
-import { Agent, AlphaBetaAgent, RandomAgent, TDAgent, outcomeFor } from "../src/rl/agents";
+import { Agent, AlphaBetaAgent, RandomAgent, SearchTDAgent, TDAgent, outcomeFor } from "../src/rl/agents";
 import { evaluate, playGame } from "../src/rl/play";
 import { initialState, legalActions, applyAction } from "../src/rl/engine";
 
@@ -36,9 +36,15 @@ const cfg = {
     evalGames: +arg("eval-games", "40"),
     evalVs: arg("eval-vs", "random,ab1,ab2").split(","),
     alpha: +arg("alpha", "0.01"),
+    /** Linearly decayed to this by the last episode. Defaults to no decay. */
+    alphaFinal: +arg("alpha-final", arg("alpha", "0.01")),
     gamma: +arg("gamma", "0.99"),
     epsilon: +arg("epsilon", "0.1"),
+    epsilonFinal: +arg("epsilon-final", arg("epsilon", "0.1")),
+    lambda: +arg("lambda", "0"),
     captureReward: +arg("capture-reward", "0.05"),
+    /** Search depth used for move selection while training (1 = greedy). */
+    searchDepth: +arg("search-depth", "1"),
     hidden: arg("hidden", "64,64").split(",").map(Number),
     activation: arg("activation", "relu") as "relu" | "tanh",
     seed: +arg("seed", "1"),
@@ -58,13 +64,23 @@ function makeBaseline(name: string): Agent {
 const rng = mulberry32(cfg.seed);
 const evalRng = mulberry32(cfg.seed + 1000);
 const net = new ValueNet({ hidden: cfg.hidden, activation: cfg.activation, seed: cfg.seed });
-const tdOpts = { alpha: cfg.alpha, gamma: cfg.gamma, epsilon: cfg.epsilon, captureReward: cfg.captureReward, learn: true };
+const tdOpts = {
+    alpha: cfg.alpha,
+    gamma: cfg.gamma,
+    epsilon: cfg.epsilon,
+    lambda: cfg.lambda,
+    captureReward: cfg.captureReward,
+    learn: true,
+};
 
 // Self-play: the same network plays (and learns from) both colours.
 const learnerA = new TDAgent(net, tdOpts, "td");
 const learnerB = new TDAgent(net, tdOpts, "td");
 const trainOpponent: Agent | null = cfg.opponent === "self" ? null : makeBaseline(cfg.opponent);
-const greedy = new TDAgent(net, { ...tdOpts, epsilon: 0, learn: false }, "td-greedy");
+// Evaluated the way it will actually be played: greedy, or with search on top.
+const greedy: Agent = cfg.searchDepth > 1
+    ? new SearchTDAgent(net, cfg.searchDepth, `td-search-d${cfg.searchDepth}`)
+    : new TDAgent(net, { ...tdOpts, epsilon: 0, learn: false }, "td-greedy");
 const evalOpponents = cfg.evalVs.map((n) => ({ name: n, agent: makeBaseline(n) }));
 
 // A fixed set of positions to watch V(s) and dead ReLUs on.
@@ -86,7 +102,7 @@ const startX = encode(applyAction(initialState(), { from: -1, to: 0, capture: -1
 
 const trainCsv = path.join(outDir, "train.csv");
 const evalCsv = path.join(outDir, "eval.csv");
-fs.writeFileSync(trainCsv, "episode,games,learner_score,avg_plies,mean_abs_td,mean_grad_norm,zero_grad_frac,updates_per_game,v_opening,weight_l2,dead_l1,dead_l2,sec\n");
+fs.writeFileSync(trainCsv, "episode,games,learner_score,avg_plies,mean_abs_td,mean_grad_norm,zero_grad_frac,updates_per_game,v_opening,weight_l2,dead_l1,dead_l2,alpha,epsilon,sec\n");
 fs.writeFileSync(evalCsv, "episode,opponent,games,wins,draws,losses,win_rate,score,avg_plies\n");
 
 function runEval(ep: number): number {
@@ -105,6 +121,16 @@ const t0 = Date.now();
 let window = { games: 0, score: 0, plies: 0 };
 
 for (let ep = 1; ep <= cfg.episodes; ep++) {
+    // Linear decay: a step size that works early is too coarse late, which is
+    // what a flat mean |TD error| across training looks like.
+    const t = cfg.episodes > 1 ? (ep - 1) / (cfg.episodes - 1) : 0;
+    const alphaNow = cfg.alpha + (cfg.alphaFinal - cfg.alpha) * t;
+    const epsNow = cfg.epsilon + (cfg.epsilonFinal - cfg.epsilon) * t;
+    for (const a of [learnerA, learnerB]) {
+        a.opts.alpha = alphaNow;
+        a.opts.epsilon = epsNow;
+    }
+
     const learnerWhite = ep % 2 === 1;
     let rec;
     if (!trainOpponent) {
@@ -131,7 +157,8 @@ for (let ep = 1; ep <= cfg.episodes; ep++) {
                 mean(deltas).toFixed(5), mean(grads).toFixed(5),
                 (grads.filter((g) => g === 0).length / Math.max(1, grads.length)).toFixed(4),
                 (grads.length / window.games).toFixed(1), net.value(startX).toFixed(4), net.weightL2().toFixed(3),
-                dead[0]?.toFixed(3) ?? "", dead[1]?.toFixed(3) ?? "", ((Date.now() - t0) / 1000).toFixed(0),
+                dead[0]?.toFixed(3) ?? "", dead[1]?.toFixed(3) ?? "",
+                alphaNow.toFixed(5), epsNow.toFixed(3), ((Date.now() - t0) / 1000).toFixed(0),
             ].join(",") + "\n",
         );
         const avgScore = runEval(ep);

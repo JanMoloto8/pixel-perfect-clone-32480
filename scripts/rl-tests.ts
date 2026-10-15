@@ -8,7 +8,7 @@ import {
 } from "../src/rl/engine";
 import { encode, FEATURE_SIZE } from "../src/rl/features";
 import { ValueNet } from "../src/rl/valueNet";
-import { AlphaBetaAgent, RandomAgent, TDAgent } from "../src/rl/agents";
+import { AlphaBetaAgent, RandomAgent, SearchTDAgent, TDAgent } from "../src/rl/agents";
 import { evaluate, playGame } from "../src/rl/play";
 
 let failed = 0;
@@ -117,6 +117,61 @@ function consistent(s: GameState): boolean {
     const st = td.drainStats();
     check("weights change during a training game", changed > 0,
         `${changed}/${after.length} weights changed, ${st.gradNorm.length} updates, zero-grad updates: ${st.gradNorm.filter((g) => g === 0).length}`);
+}
+
+// ---------- TD(lambda) ----------
+{
+    const net = new ValueNet({ hidden: [64, 64], activation: "relu", seed: 1 });
+    const before = net.toJSON().flatMap((w) => w.values);
+    const a = new TDAgent(net, { lambda: 0.7 }, "a");
+    const b = new TDAgent(net, { lambda: 0.7 }, "b");
+    const t0 = tf.memory().numTensors;
+    const rng = mulberry32(3);
+    for (let i = 0; i < 10; i++) playGame(a, b, rng);
+    const growth = tf.memory().numTensors - t0;
+    const after = net.toJSON().flatMap((w) => w.values);
+    const changed = after.filter((v, i) => v !== before[i]).length;
+    const st = a.drainStats();
+    check("TD(lambda) trains and logs non-zero gradients", changed > 0 && st.gradNorm.every((g) => g > 0),
+        `${changed}/${after.length} weights changed, ${st.gradNorm.length} updates`);
+    // Each agent holds one trace tensor per trainable tensor; nothing else may accumulate.
+    const perAgent = net.toJSON().length;
+    check("TD(lambda) traces do not leak over 10 games", growth <= 2 * perAgent + 4, `tensor growth ${growth}, 2 agents x ${perAgent} traces`);
+    a.dispose();
+    b.dispose();
+    check("disposing a TD(lambda) agent frees its traces", tf.memory().numTensors - t0 <= 4, `${tf.memory().numTensors - t0} left`);
+}
+
+// ---------- search over V ----------
+{
+    const net = new ValueNet({ hidden: [64, 64], activation: "relu", seed: 4 });
+    const greedy = new TDAgent(net, { epsilon: 0, learn: false }, "greedy");
+    const d1 = new SearchTDAgent(net, 1);
+    greedy.startGame(0);
+    d1.startGame(0);
+    let same = 0, n = 0;
+    const r = mulberry32(11);
+    for (let g = 0; g < 10; g++) {
+        let s = initialState();
+        while (s.result === null && n < 150) {
+            if (s.toMove === 0) {
+                const x = greedy.selectAction(s, mulberry32(7));
+                const y = d1.selectAction(s, mulberry32(7));
+                n++;
+                if (x.from === y.from && x.to === y.to && x.capture === y.capture) same++;
+            }
+            const acts = legalActions(s);
+            s = applyAction(s, acts[Math.floor(r() * acts.length)]);
+        }
+    }
+    check("search depth 1 reduces to the greedy agent", same === n, `${same}/${n} positions agree`);
+
+    // Deeper search over the same V should not be weaker against a random opponent.
+    const rng = mulberry32(6);
+    const s1 = evaluate(new SearchTDAgent(net, 1), new RandomAgent(), 30, rng, undefined, 4);
+    const s2 = evaluate(new SearchTDAgent(net, 2), new RandomAgent(), 30, rng, undefined, 4);
+    check("search depth 2 is not worse than depth 1 on an untrained net", s2.score >= s1.score - 0.25,
+        `d1 ${s1.score.toFixed(2)} vs d2 ${s2.score.toFixed(2)}`);
 }
 
 console.log(failed === 0 ? "\nAll checks passed." : `\n${failed} check(s) failed.`);

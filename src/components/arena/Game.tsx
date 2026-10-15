@@ -5,14 +5,16 @@ import {
     AlphaBeta,
     getRandomMove,
     getRandomCapture,
-    Minimaxmove,
     matchToEngineState,
 } from "../../utilities/helperFunctions";
 import { NeuralNetwork } from "./neuralNetwork";
-import { TDAgent } from "@/rl/agents";
+import { SearchTDAgent, TDAgent } from "@/rl/agents";
+import { Algorithm } from "@/types/Algorithm";
 
 /** Max full moves before the arena calls a draw (stops endless shuffling). */
 export const MAX_ARENA_MOVES = 200;
+/** Plies of lookahead for Algorithm.TD_SEARCH. 2 is fast enough for the UI. */
+export const ARENA_SEARCH_DEPTH = 2;
 
 /*
  * One network per colour, shared across episodes, so training carries over
@@ -151,6 +153,8 @@ class Agent {
     public Cows: number;
     public network: NeuralNetwork;
     public td: TDAgent;
+    /** Same network, played through a search. Used by Algorithm.TD_SEARCH. */
+    public search: SearchTDAgent;
 
     constructor(Player: Binary, mode: AgentMode, algorithm: string) {
         this.name = algorithm;
@@ -165,6 +169,8 @@ class Agent {
             epsilon: mode === 0 ? 0.1 : 0,
         });
         this.td.startGame(Player);
+        this.search = new SearchTDAgent(this.network, ARENA_SEARCH_DEPTH);
+        this.search.startGame(Player);
     }
 
     /** Final TD update for this agent once the game is decided. */
@@ -213,21 +219,23 @@ class Agent {
     public chooseMoveAndCapture(match: Match): [number, Movement] {
         var Capture = -1;
 
-        if (this.name === "Minimax") {
-            
-            const { capture, move } = Minimaxmove(match, 3);
-            return [capture, move];
-        }
-
-        if (this.name === "AlphaBeta") {
+        // Compare against the Algorithm enum values, which is what the UI passes.
+        // ("AlphaBeta"/"Minimax" never matched Algorithm.MINIMAX === "Alpha-Beta",
+        // so this agent silently played random moves.)
+        if (this.name === Algorithm.MINIMAX) {
             const { capture, move } = AlphaBeta(match, 3);
             return [capture, move];
         }
 
-        if (this.name === "Standard" || this.name === "TD") {
-            // Pick the move whose resulting position the network values most
-            // (and, in training mode, do the TD(0) update for the previous move).
-            const action = this.td.selectAction(matchToEngineState(match), Math.random);
+        if (this.name === Algorithm.STANDARD || this.name === Algorithm.TD || this.name === Algorithm.TD_SEARCH) {
+            // In play mode TD + Search runs the same learned V through a negamax
+            // search. In training mode we always use the learning agent, because
+            // that is what performs the TD update.
+            const useSearch = this.name === Algorithm.TD_SEARCH && this.mode !== 0;
+            const state = matchToEngineState(match);
+            const action = useSearch
+                ? this.search.selectAction(state, Math.random)
+                : this.td.selectAction(state, Math.random);
             const from = action.from < 0 ? action.to : action.from; // arena encodes a placement as from === to
             return [action.capture, { from, to: action.to }];
         }

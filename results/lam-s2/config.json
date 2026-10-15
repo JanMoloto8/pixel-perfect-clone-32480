@@ -1,0 +1,25 @@
+{
+  "name": "lam-s2",
+  "opponent": "self",
+  "episodes": 2000,
+  "evalEvery": 250,
+  "evalGames": 50,
+  "evalVs": [
+    "random",
+    "ab1"
+  ],
+  "alpha": 0.01,
+  "alphaFinal": 0.002,
+  "gamma": 0.99,
+  "epsilon": 0.1,
+  "epsilonFinal": 0.02,
+  "lambda": 0.7,
+  "captureReward": 0.05,
+  "searchDepth": 1,
+  "hidden": [
+    64,
+    64
+  ],
+  "activation": "relu",
+  "seed": 2
+}

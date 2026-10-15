@@ -64,8 +64,81 @@ Tournament scores are (wins + ½ draws) / 100 games, averaged over the 2 seeds:
 - **Self-play is best**, and it also beats every other trained agent head to head.
 - Agents trained against alpha-beta lose almost every training game. They learn to hold draws against alpha-beta, but they never learn how to win, and they even lose to the random player.
 - All TD agents still lose to alpha-beta at depth 2 and above. A one-ply value agent cannot match a search agent yet.
-- Ideas to close that gap:
-  - add a 1–2 ply lookahead on top of V
-  - train for longer
-  - use TD(λ)
+
+## Closing the gap: search beats a better learning rule
+
+Two things were tried against that last point. Only one of them worked.
+
+### What did not work: longer training, and TD(λ)
+
+The eval curves say extra episodes are wasted. Against random, self-play reaches
+0.96 within 250 games. Against alpha-beta depth 1, learning stops around episode
+500 and then only oscillates (seed 1 goes 0.25 → 0.39 → 0.20 → 0.11 → 0.45 with
+no trend). `mean_abs_td` is 0.147 at episode 250 and 0.152 at episode 5000, so
+the value function never settles. **1,000–2,000 episodes gets everything this
+setup gives**; 5,000 buys nothing measurable.
+
+TD(λ=0.7) with linear decay of alpha (0.01 → 0.002) and epsilon (0.1 → 0.02) did
+fix the convergence symptom — `mean_abs_td` finally falls, to 0.108 — but it did
+**not** make the agents stronger. Scores are inside the noise of plain TD(0),
+and TD(0) wins the head-to-head (0.610 for `self-s1` over `lam-s1` at depth 2).
+A negative result worth reporting: the learning rule was not the bottleneck.
+
+### What worked: searching over the learned V
+
+`SearchTDAgent` runs negamax with the trained network as the leaf evaluator
+instead of picking the best immediate afterstate. Nothing is retrained — the
+weights are identical, only move selection changes. Depth 1 reduces exactly to
+the greedy agent (verified move-for-move in the test suite), so the depth rows
+are directly comparable.
+
+Mean score over 2 seeds, 100–150 games per pairing:
+
+| agent | search | vs random | vs AB d1 | vs AB d2 | vs AB d3 |
+|---|---|---|---|---|---|
+| TD(0) self-play | greedy (d1) | 0.964 | 0.268 | 0.045 | 0.014 |
+| TD(0) self-play | **d2** | 0.993 | **0.558** | **0.255** | 0.058 |
+| TD(λ) self-play | greedy (d1) | 0.972 | 0.232 | 0.065 | 0.015 |
+| TD(λ) self-play | d2 | 0.983 | 0.508 | 0.160 | 0.053 |
+
+Against alpha-beta depth 1 the score roughly doubles (0.268 → 0.558); against
+depth 2 it rises about fivefold (0.045 → 0.255). Both are far outside the
+standard error (roughly 0.035–0.05 per cell), so this is a real effect and not
+seed luck. Depth 3 alpha-beta is still winning, but it is no longer a shutout.
+
+The cost is about 10–20x more time per move (0.03 s/game greedy, 0.3–1.7 s/game
+at depth 2), which is still fast enough for the browser arena.
+
+**Conclusion: the gap was a search problem, not a learning problem.** The learned
+value function was reasonable all along; selecting greedily from one ply threw
+most of its value away.
+
+### Arena bug found along the way
+
+`Algorithm.MINIMAX` is the string `"Alpha-Beta"`, but `Game.tsx` compared
+`this.name` against `"AlphaBeta"` and `"Minimax"`. Neither ever matched, so
+choosing the alpha-beta agent in the web arena fell through to `getRandomMove`
+and **played randomly**. The headless scripts call the engine directly and were
+never affected. Dispatch now compares against the `Algorithm` enum.
+`Algorithm.MCTS` still has no implementation; `IMPLEMENTED_ALGORITHMS` lists
+what actually works so the UI can avoid offering it.
+
+### Honest caveats
+
+- `best-weights.json` is the max over ~21 evaluation checkpoints of 40–50 games
+  each. Taking a maximum over that many noisy measurements selects partly on
+  luck, so those scores are optimistic. Use `--final`, or re-evaluate the top
+  checkpoints with several hundred games, for a headline number.
+- Two seeds is enough to catch a broken run, not enough for a confident
+  difference. Use 3–5 and report the spread.
+- The original agent's playing strength was never benchmarked, only its
+  gradients. So there is no before/after win rate for the fix itself — the
+  argument is that an all-dead first layer makes V constant, which makes every
+  move a tie, which is random play.
+
+### Remaining ideas
+
+  - train *with* search in the loop (TD-leaf), so V learns to be a good leaf
+    evaluator rather than a good one-ply ranker
+  - deeper search with better move ordering and a transposition table
   - start with self-play, then mix in alpha-beta opponents

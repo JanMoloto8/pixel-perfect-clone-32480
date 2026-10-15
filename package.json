@@ -13,7 +13,8 @@
         "rl:test": "tsx scripts/rl-tests.ts",
         "rl:arena-test": "tsx scripts/arena-smoke.ts",
         "rl:train": "tsx scripts/train.ts",
-        "rl:compare": "tsx scripts/compare.ts"
+        "rl:compare": "tsx scripts/compare.ts",
+        "rl:search": "tsx scripts/search-eval.ts"
     },
     "dependencies": {
         "@hookform/resolvers": "^5.2.2",

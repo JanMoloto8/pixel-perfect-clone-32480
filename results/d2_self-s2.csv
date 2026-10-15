@@ -1,0 +1,5 @@
+agent,opponent,games,wins,draws,losses,score,avg_plies
+self-s2+d2,random,100,97,3,0,0.985,201.2
+self-s2+d2,ab1,100,49,16,35,0.570,92.0
+self-s2+d2,ab2,100,19,20,61,0.290,78.2
+self-s2+d2,ab3,100,4,4,92,0.060,48.8

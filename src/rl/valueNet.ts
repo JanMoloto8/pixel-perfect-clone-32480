@@ -91,6 +91,62 @@ export class ValueNet {
         });
     }
 
+    /**
+     * A fresh set of zeroed eligibility traces, one per trainable tensor.
+     *
+     * Traces belong to a *trajectory*, not to the weights: in self-play the
+     * two players share this network but have separate histories, so each
+     * agent owns its own trace set and passes it in. Caller must dispose.
+     */
+    createTraces(): tf.Tensor[] {
+        return this.variables().map((v) => tf.keep(tf.zerosLike(v)));
+    }
+
+    static disposeTraces(traces: tf.Tensor[] | null): void {
+        traces?.forEach((t) => t.dispose());
+    }
+
+    /**
+     * Semi-gradient TD(lambda) with accumulating traces:
+     *
+     *   e <- gamma * lambda * e + grad_w V(x)
+     *   w <- w + alpha * delta * e
+     *
+     * `traces` is mutated in place. lambda = 0 makes this identical to
+     * tdStep; lambda = 1 credits the whole trajectory so far.
+     */
+    tdStepTraces(
+        x: Float32Array,
+        target: number,
+        alpha: number,
+        gammaLambda: number,
+        traces: tf.Tensor[],
+    ): TDStepInfo {
+        const vars = this.variables();
+        let info!: TDStepInfo;
+        tf.tidy(() => {
+            const input = tf.tensor2d(x, [1, FEATURE_SIZE]);
+            const { value, grads } = tf.variableGrads(
+                () => (this.model.apply(input) as tf.Tensor).sum() as tf.Scalar,
+                vars,
+            );
+            const v = value.dataSync()[0];
+            const delta = target - v;
+            let sq = tf.scalar(0);
+            for (let i = 0; i < vars.length; i++) {
+                const variable = vars[i];
+                const g = grads[variable.name];
+                sq = sq.add(g.square().sum());
+                const next = tf.keep(traces[i].mul(gammaLambda).add(g));
+                traces[i].dispose();
+                traces[i] = next;
+                variable.assign(variable.add(next.mul(alpha * delta)));
+            }
+            info = { value: v, target, delta, gradNorm: Math.sqrt(sq.dataSync()[0]) };
+        });
+        return info;
+    }
+
     /** Fraction of hidden units that output exactly 0 for every row (dead ReLUs). */
     deadUnitFraction(xs: Float32Array, n: number): number[] {
         if (this.config.activation !== "relu") return this.config.hidden.map(() => 0);

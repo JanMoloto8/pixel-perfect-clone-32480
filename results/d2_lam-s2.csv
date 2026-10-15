@@ -1,0 +1,5 @@
+agent,opponent,games,wins,draws,losses,score,avg_plies
+lam-s2+d2,random,100,97,3,0,0.985,237.8
+lam-s2+d2,ab1,100,50,14,36,0.570,94.0
+lam-s2+d2,ab2,100,6,18,76,0.150,80.4
+lam-s2+d2,ab3,100,3,7,90,0.065,65.9
