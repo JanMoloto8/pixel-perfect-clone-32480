@@ -8,7 +8,7 @@ import {
     matchToEngineState,
 } from "../../utilities/helperFunctions";
 import { NeuralNetwork } from "./neuralNetwork";
-import { SearchTDAgent, TDAgent } from "@/rl/agents";
+import { SearchTDAgent, TDAgent,RandomAgent } from "@/rl/agents";
 import { Algorithm } from "@/types/Algorithm";
 
 /** Max full moves before the arena calls a draw (stops endless shuffling). */

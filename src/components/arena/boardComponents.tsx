@@ -181,6 +181,7 @@ export function MatchConfiguration({
                         <option>TD</option>
                         <option>Minimax</option>
                         <option>AlphaBeta</option>
+                        <option>Random</option>
                     </select>
                 </div>
 
@@ -197,6 +198,7 @@ export function MatchConfiguration({
                         <option>TD</option>
                         <option>Minimax</option>
                         <option>AlphaBeta</option>
+                        <option>Random</option>
                     </select>
                 </div>
                 

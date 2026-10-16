@@ -64,7 +64,7 @@ export type Rules = {
     maxPlies: number;
 };
 
-export const DEFAULT_RULES: Rules = { noCaptureDrawPlies: 100, maxPlies: 400 };
+export const DEFAULT_RULES: Rules = { noCaptureDrawPlies: 10000, maxPlies: 400000 };
 
 export function initialState(): GameState {
     return {
@@ -147,17 +147,21 @@ function baseMoves(s: GameState): [number, number][] {
 
 export function legalActions(s: GameState): Action[] {
     if (s.result !== null) return [];
+
     const p = s.toMove;
     const c = cell(p);
     const opp = other(p);
-    const actions: Action[] = [];
+    const actions: Action[] = []; 
     const board = s.board;
     for (const [from, to] of baseMoves(s)) {
+
         if (from >= 0) board[from] = 0;
         board[to] = c;
         const formsMill = inMill(board, to);
         if (formsMill && s.onBoard[opp] > 0) {
-            for (const cap of capturablePoints(board, opp)) actions.push({ from, to, capture: cap });
+            for (const cap of capturablePoints(board, opp)) {
+                actions.push({ from, to, capture: cap });
+            }
         } else {
             actions.push({ from, to, capture: -1 });
         }
@@ -200,9 +204,9 @@ export function applyActionInPlace(s: GameState, a: Action, rules: Rules = DEFAU
 }
 
 export function applyAction(s: GameState, a: Action, rules: Rules = DEFAULT_RULES): GameState {
-    const n = cloneState(s);
-    applyActionInPlace(n, a, rules);
-    return n;
+    const sClone = cloneState(s);
+    applyActionInPlace(sClone, a, rules);
+    return sClone;
 }
 
 /** Build an engine state from the arena's per-colour bitboards. */

@@ -5,6 +5,7 @@ export enum Algorithm {
     TD_SEARCH = "TD + Search",
     MINIMAX = "Alpha-Beta",
     MCTS = "Monte Carlo Tree Search",
+    RANDOM = "Random",
 }
 //standard TD, TD(λ), Monte Carlo learning, and Minimax-guided TD learning
 
@@ -14,4 +15,5 @@ export const IMPLEMENTED_ALGORITHMS: Algorithm[] = [
     Algorithm.TD,
     Algorithm.TD_SEARCH,
     Algorithm.MINIMAX,
+    Algorithm.RANDOM,
 ];
