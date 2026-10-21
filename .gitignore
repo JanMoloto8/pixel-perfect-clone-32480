@@ -35,3 +35,7 @@ dist-ssr
 results/logs/
 results/*/weights.json
 results/*/best-weights.json
+
+# Aggregator output: regenerate with "npm run rl:aggregate"
+results/summary/aggregate_*.csv
+results/summary/aggregate_report.txt
