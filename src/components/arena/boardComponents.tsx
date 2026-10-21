@@ -177,10 +177,9 @@ export function MatchConfiguration({
                         onChange={(e) => setWhiteAlgorithm(e.target.value)}
                         className="w-full rounded-md border border-border bg-panel px-3 py-2 disabled:opacity-50"
                     >
-                        <option>Standard</option>
                         <option>TD</option>
+                        <option>TD + Minimax</option>
                         <option>Minimax</option>
-                        <option>AlphaBeta</option>
                         <option>Random</option>
                     </select>
                 </div>
@@ -194,10 +193,9 @@ export function MatchConfiguration({
                         onChange={(e) => setBlackAlgorithm(e.target.value)}
                         className="w-full rounded-md border border-border bg-panel px-3 py-2 disabled:opacity-50"
                     >
-                        <option>Standard</option>
                         <option>TD</option>
+                        <option>TD + Minimax</option>
                         <option>Minimax</option>
-                        <option>AlphaBeta</option>
                         <option>Random</option>
                     </select>
                 </div>

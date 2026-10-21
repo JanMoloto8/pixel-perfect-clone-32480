@@ -9,8 +9,8 @@ export function useMatchTimer() {
     const [matchTime, setMatchTime] = useState(0);
     const [matchStatus, setMatchStatus] = useState<MatchStatus>("NOT_STARTED");
     const [showCountdown, setShowCountdown] = useState(false);
-    const [whiteAlgorithm, setWhiteAlgorithm] = useState(Algorithm.STANDARD);
-    const [blackAlgorithm, setBlackAlgorithm] = useState(Algorithm.STANDARD);
+    const [whiteAlgorithm, setWhiteAlgorithm] = useState(Algorithm.TD);
+    const [blackAlgorithm, setBlackAlgorithm] = useState(Algorithm.TD);
     const [whiteMode, setWhiteMode] = useState<AgentMode>(1);
     const [blackMode, setBlackMode] = useState<AgentMode>(1);
     const [whiteWins, setWhiteWins] = useState(0);

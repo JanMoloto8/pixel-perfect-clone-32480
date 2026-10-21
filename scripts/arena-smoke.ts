@@ -40,7 +40,7 @@ const pairs: [string, string, 0 | 1, 0 | 1][] = [
 for (const p of pairs) {
     for (let g = 0; g < 2; g++) {
         const r = run(...p);
-        console.log(`${p[0]}(${p[2] ? "play" : "train"}) vs ${p[1]}(${p[3] ? "play" : "train"}): ${JSON.stringify(r)}`);
+        console.log(`${p[0]}(${p[2] ? "Playing" : "Training"}) vs ${p[1]}(${p[3] ? "Playing" : "Training"}): ${JSON.stringify(r)}`);
         if (!r.over) throw new Error("game did not finish");
     }
 }

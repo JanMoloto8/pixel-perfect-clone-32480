@@ -1,9 +1,8 @@
 export enum Algorithm {
-    STANDARD = "Standard",
     TD = "TD",
     /** The learned value function, but chosen through a 2-ply negamax search. */
-    TD_SEARCH = "TD + Search",
-    MINIMAX = "Alpha-Beta",
+    TD_SEARCH = "TD + Minimax",
+    MINIMAX = "Minimax",
     MCTS = "Monte Carlo Tree Search",
     RANDOM = "Random",
 }
@@ -11,7 +10,6 @@ export enum Algorithm {
 
 /** Agents that are actually implemented in Game.tsx (MCTS is not yet). */
 export const IMPLEMENTED_ALGORITHMS: Algorithm[] = [
-    Algorithm.STANDARD,
     Algorithm.TD,
     Algorithm.TD_SEARCH,
     Algorithm.MINIMAX,

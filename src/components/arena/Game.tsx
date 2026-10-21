@@ -225,16 +225,15 @@ class Agent {
 
     public chooseMoveAndCapture(match: Match): [number, Movement] {
         var Capture = -1;
-
         // Compare against the Algorithm enum values, which is what the UI passes.
         // ("AlphaBeta"/"Minimax" never matched Algorithm.MINIMAX === "Alpha-Beta",
         // so this agent silently played random moves.)
         if (this.name === Algorithm.MINIMAX) {
-            const { capture, move } = AlphaBeta(match, 3);
+            const { capture, move } = AlphaBeta(match, 2);
             return [capture, move];
         }
 
-        if (this.name === Algorithm.STANDARD || this.name === Algorithm.TD || this.name === Algorithm.TD_SEARCH) {
+        if (this.name === Algorithm.TD || this.name === Algorithm.TD_SEARCH) {
             // In play mode TD + Search runs the same learned V through a negamax
             // search. In training mode we always use the learning agent, because
             // that is what performs the TD update.

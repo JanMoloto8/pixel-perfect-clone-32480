@@ -75,7 +75,7 @@ export function heuristic(s: GameState, p: Player): number {
     }
     const material = totalPieces(s, p) - totalPieces(s, o);
     const mobility = countMoves(s, p) - countMoves(s, o);
-    return 10 * material + 2 * mills + 1 * twos + 0.2 * mobility;
+    return 12 * material + 12 * mills + 0.4 * twos + 0.2 * mobility;
 }
 
 const WIN = 10000;
@@ -114,7 +114,8 @@ export class AlphaBetaAgent implements Agent {
         let bestActs: Action[] = [];
         for (const a of acts) {
             // Full window at the root so ties are real ties (lets us break them randomly).
-            const v = -this.negamax(applyAction(s, a, this.rules), this.depth - 1, -Infinity, Infinity);
+            const nextState = applyAction(s, a, this.rules);
+            const v = -this.negamax(nextState, this.depth - 1, -Infinity, Infinity);
             if (v > best + 1e-9) {
                 best = v;
                 bestActs = [a];
@@ -122,7 +123,8 @@ export class AlphaBetaAgent implements Agent {
                 bestActs.push(a);
             }
         }
-        return bestActs[Math.floor(rng() * bestActs.length)];
+
+         return bestActs[Math.floor(rng() * bestActs.length)];
     }
 }
 
@@ -151,7 +153,7 @@ export const DEFAULT_TD: TDOptions = {
     gamma: 0.99,
     epsilon: 0.1,
     lambda: 0,
-    captureReward: 0.05,
+    captureReward: 0.15,
     learn: true,
 };
 
@@ -216,14 +218,11 @@ export class TDAgent implements Agent {
         const acts = legalActions(s);
         const n = acts.length;
         if (this.buf.length < n * FEATURE_SIZE) this.buf = new Float32Array(n * FEATURE_SIZE * 2);
-
         const afters = acts.map((a) => applyAction(s, a, this.rules));
         afters.forEach((after, i) => encode(after, this.me, this.buf, i * FEATURE_SIZE));
+
         const v = this.net.values(this.buf, n);
-
-        // Terminal afterstates have a known value; don't ask the network.
         const score = afters.map((after, i) => (after.result !== null ? outcomeFor(after, this.me) : v[i]));
-
         let idx: number;
         if (this.opts.epsilon > 0 && rng() < this.opts.epsilon) {
             idx = Math.floor(rng() * n);
@@ -236,7 +235,6 @@ export class TDAgent implements Agent {
             }
             idx = ties[Math.floor(rng() * ties.length)];
         }
-
         const chosen = acts[idx];
         const after = afters[idx];
 
@@ -251,6 +249,7 @@ export class TDAgent implements Agent {
                 this.prevX = this.buf.slice(idx * FEATURE_SIZE, (idx + 1) * FEATURE_SIZE);
             }
         }
+        
         this.prevMyTotal = totalPieces(after, this.me);
         return chosen;
     }

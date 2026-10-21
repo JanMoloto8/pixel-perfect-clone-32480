@@ -73,6 +73,7 @@ export class ValueNet {
      */
     tdStep(x: Float32Array, target: number, alpha: number): TDStepInfo {
         const vars = this.variables();
+
         return tf.tidy(() => {
             const input = tf.tensor2d(x, [1, FEATURE_SIZE]);
             const { value, grads } = tf.variableGrads(
@@ -80,6 +81,7 @@ export class ValueNet {
                 vars,
             );
             const v = value.dataSync()[0];
+            
             const delta = target - v;
             let sq = tf.scalar(0);
             for (const variable of vars) {
@@ -87,6 +89,7 @@ export class ValueNet {
                 sq = sq.add(g.square().sum());
                 variable.assign(variable.add(g.mul(alpha * delta)));
             }
+
             return { value: v, target, delta, gradNorm: Math.sqrt(sq.dataSync()[0]) };
         });
     }
