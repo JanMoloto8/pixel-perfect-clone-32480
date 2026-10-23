@@ -164,6 +164,17 @@
         background-color: var(--color-background);
         color: var(--color-foreground);
         font-family: var(--font-sans);
+        /*
+         * Faint engineering grid behind everything, plus a cool wash from the
+         * top. Fixed attachment so it reads as a surface the dashboard sits on
+         * rather than something that scrolls with the content.
+         */
+        background-image:
+            radial-gradient(ellipse 110% 70% at 50% -10%, color-mix(in oklch, var(--info) 14%, transparent), transparent 70%),
+            linear-gradient(to right, color-mix(in oklch, var(--border) 45%, transparent) 1px, transparent 1px),
+            linear-gradient(to bottom, color-mix(in oklch, var(--border) 45%, transparent) 1px, transparent 1px);
+        background-size: 100% 100%, 46px 46px, 46px 46px;
+        background-attachment: fixed;
     }
 
     h1,
@@ -173,13 +184,68 @@
         font-family: var(--font-display);
         letter-spacing: 0.06em;
     }
+
+    /* Numbers are read as data, so give them a tabular monospace face. */
+    .font-mono,
+    code {
+        font-variant-numeric: tabular-nums;
+    }
 }
 
 @utility panel-card {
-    border: 1px solid var(--border);
-    border-radius: 0.5rem;
-    background-color: var(--panel);
+    position: relative;
+    border: 1px solid color-mix(in oklch, var(--border) 85%, var(--info) 15%);
+    border-radius: 0.6rem;
+    /* Slight translucency over the grid, so panels feel like layered glass. */
+    background-color: color-mix(in oklch, var(--panel) 88%, transparent);
+    backdrop-filter: blur(8px);
     overflow: hidden;
+    box-shadow:
+        0 1px 0 0 color-mix(in oklch, var(--info) 12%, transparent) inset,
+        0 10px 30px -18px rgb(0 0 0 / 0.9);
+    transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+/* A hairline of light along the top edge, brightest in the middle. */
+@utility panel-card {
+    &::before {
+        content: "";
+        position: absolute;
+        inset-inline: 0;
+        top: 0;
+        height: 1px;
+        background: linear-gradient(
+            to right,
+            transparent,
+            color-mix(in oklch, var(--info) 70%, transparent),
+            transparent
+        );
+        pointer-events: none;
+    }
+
+    &:hover {
+        border-color: color-mix(in oklch, var(--border) 60%, var(--info) 40%);
+        box-shadow:
+            0 1px 0 0 color-mix(in oklch, var(--info) 18%, transparent) inset,
+            0 10px 34px -16px color-mix(in oklch, var(--info) 30%, rgb(0 0 0 / 0.9));
+    }
+}
+
+/* Panel headings get a small live indicator before the text. */
+@utility panel-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+
+    &::before {
+        content: "";
+        width: 0.3rem;
+        height: 0.95rem;
+        border-radius: 999px;
+        background: var(--info);
+        box-shadow: 0 0 10px color-mix(in oklch, var(--info) 80%, transparent);
+        flex: none;
+    }
 }
 
 @keyframes panelFadeIn {

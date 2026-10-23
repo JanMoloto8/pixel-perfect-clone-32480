@@ -1,12 +1,22 @@
 /*
  * Drives the website's Match class exactly like useMatchTimer does, for every
- * agent pairing, to check that games finish and nothing throws.
+ * agent pairing, to check that games finish, nothing throws, and the per-episode
+ * stats rows are produced.
  *   npx tsx scripts/arena-smoke.ts
  */
-import { Match } from "../src/components/arena/Game";
+import { AgentSetup, Match, sessionStats } from "../src/components/arena/Game";
+import { Algorithm } from "../src/types/Algorithm";
+import { AgentConfig, DEFAULT_AGENT_CONFIG } from "../src/types/AgentConfig";
+import { isTrainingRow } from "../src/rl/episodeStats";
 
-function run(white: string, black: string, wMode: 0 | 1, bMode: 0 | 1) {
-    const match = new Match(white, black, wMode, bMode);
+type Mode = 0 | 1; // 0 = training, 1 = playing
+
+function setup(algorithm: Algorithm, mode: Mode, config: Partial<AgentConfig> = {}): AgentSetup {
+    return { algorithm, mode, config: { ...DEFAULT_AGENT_CONFIG, ...config } };
+}
+
+function run(white: AgentSetup, black: AgentSetup, episode: number, total: number) {
+    const match = new Match(white, black, episode, total);
     let pending = -1, steps = 0;
     const t0 = Date.now();
     while (!match.isGameOver() && steps < 2000) {
@@ -29,19 +39,38 @@ function run(white: string, black: string, wMode: 0 | 1, bMode: 0 | 1) {
     return { winner: match.getWinner() ?? "draw", moves: match.moveCounter(), over: match.isGameOver(), ms: Date.now() - t0 };
 }
 
-const pairs: [string, string, 0 | 1, 0 | 1][] = [
-    ["TD", "TD", 0, 0],
-    ["Standard", "Random", 0, 1],
-    ["TD", "Minimax", 1, 1],
-    ["AlphaBeta", "TD", 1, 0],
-    ["Minimax", "AlphaBeta", 1, 1],
-    ["Random", "Random", 1, 1],
+const label = (s: AgentSetup) => `${s.algorithm}(${s.mode ? "Playing" : "Training"})`;
+
+const pairs: [AgentSetup, AgentSetup][] = [
+    [setup(Algorithm.TD, 0), setup(Algorithm.TD, 0)],
+    [setup(Algorithm.TD, 0), setup(Algorithm.RANDOM, 1)],
+    [setup(Algorithm.TD_SEARCH, 0, { searchDepth: 2 }), setup(Algorithm.MINIMAX, 1, { searchDepth: 2 })],
+    [setup(Algorithm.MINIMAX, 1, { searchDepth: 2 }), setup(Algorithm.TD, 1)],
+    [setup(Algorithm.RANDOM, 1), setup(Algorithm.RANDOM, 1)],
+    // Non-default architecture and activation: catches shape or activation bugs.
+    [setup(Algorithm.TD, 0, { hiddenLayers: [32, 16, 8], activation: "tanh", lambda: 0.7 }), setup(Algorithm.RANDOM, 1)],
 ];
-for (const p of pairs) {
+
+for (const [white, black] of pairs) {
     for (let g = 0; g < 2; g++) {
-        const r = run(...p);
-        console.log(`${p[0]}(${p[2] ? "Playing" : "Training"}) vs ${p[1]}(${p[3] ? "Playing" : "Training"}): ${JSON.stringify(r)}`);
+        const r = run(white, black, g, 2);
+        console.log(`${label(white)} vs ${label(black)}: ${JSON.stringify(r)}`);
         if (!r.over) throw new Error("game did not finish");
     }
 }
+
+/* Every finished episode must have produced a stats row for both sides. */
+for (const player of [0, 1] as const) {
+    const stats = sessionStats(player);
+    if (!stats || stats.rows.length === 0) throw new Error(`no stats rows for player ${player}`);
+    const last = stats.rows[stats.rows.length - 1];
+    const kind = isTrainingRow(last) ? "training" : "playing";
+    if (isTrainingRow(last) && !(last.updates_per_game > 0)) {
+        throw new Error(`training row for player ${player} logged no updates`);
+    }
+    console.log(`player ${player}: ${stats.rows.length} ${kind} rows, last episode ${last.episode}`);
+    const csv = stats.toCsv().trim().split("\n");
+    console.log(`  csv header: ${csv[0]}`);
+}
+
 console.log("arena smoke test OK");

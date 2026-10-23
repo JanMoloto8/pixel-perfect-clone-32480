@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 export function Panel({ title, children }: { title: string; children: ReactNode }) {
     return (
         <section className="panel-card panel-fade-in">
-            <h2 className="border-b border-border bg-panel-header px-4 py-3 text-sm font-bold uppercase tracking-[0.12em] text-info">
+            <h2 className="panel-heading border-b border-border/80 bg-panel-header px-4 py-3 text-sm font-bold uppercase tracking-[0.14em] text-info">
                 {title}
             </h2>
             <div>{children}</div>

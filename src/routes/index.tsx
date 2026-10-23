@@ -10,8 +10,10 @@ import {
     SimulationControls,
     MainGameBoard,
     MoveHistory,
-    MatchConfiguration,
+    SessionConfiguration,
 } from "@/components/arena/boardComponents";
+import { AgentConfigPanel } from "@/components/arena/AgentConfigPanel";
+import { StatsPanel } from "@/components/arena/StatsPanel";
 import { useMatchTimer } from "../hooks/useMatchTimer";
 import { VictoryOverlay } from "@/components/ui/VictoryOverlay";
 
@@ -69,31 +71,46 @@ function Index() {
         episodeCount,
         setEpisodeCount,
         episodesCompleted,
+        whiteConfig,
+        blackConfig,
+        setWhiteConfig,
+        setBlackConfig,
+        clearTrainedNetworks,
+        whiteStats,
+        blackStats,
     } = useMatchTimer();
+
+    const locked = matchStatus !== "NOT_STARTED";
 
     return (
         <div className="min-h-screen bg-background p-4 text-foreground lg:p-6">
             {matchStatus === "COMPLETED" && <VictoryOverlay winner={match?.getWinner() ?? null} />}
             <Header matchTime={matchTime} running={running} matchStatus={matchStatus} />
 
-            <main className="mt-4 grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)_340px]">
+            <main className="mt-4 grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)_400px]">
                 <div className="flex flex-col gap-4">
                     <MainDashboard match={match} matchStatus={matchStatus} />
-                    {matchStatus === "NOT_STARTED" && (
-                        <MatchConfiguration
-                            matchStatus={matchStatus}
-                            whiteAlgorithm={whiteAlgorithm}
-                            blackAlgorithm={blackAlgorithm}
-                            whiteMode={whiteMode}
-                            blackMode={blackMode}
-                            setWhiteAlgorithm={(value: string) => setWhiteAlgorithm(value as any)}
-                            setBlackAlgorithm={(value: string) => setBlackAlgorithm(value as any)}
-                            setWhiteMode={setWhiteMode}
-                            setBlackMode={setBlackMode}
-                            episodeCount={episodeCount}
-                            setEpisodeCount={setEpisodeCount}
-                        />
-                    )}
+                    <SessionConfiguration
+                        matchStatus={matchStatus}
+                        episodeCount={episodeCount}
+                        setEpisodeCount={setEpisodeCount}
+                        clearTrainedNetworks={clearTrainedNetworks}
+                    />
+                    <AgentConfigPanel
+                        locked={locked}
+                        whiteAlgorithm={whiteAlgorithm}
+                        blackAlgorithm={blackAlgorithm}
+                        setWhiteAlgorithm={setWhiteAlgorithm}
+                        setBlackAlgorithm={setBlackAlgorithm}
+                        whiteMode={whiteMode}
+                        blackMode={blackMode}
+                        setWhiteMode={setWhiteMode}
+                        setBlackMode={setBlackMode}
+                        whiteConfig={whiteConfig}
+                        blackConfig={blackConfig}
+                        setWhiteConfig={setWhiteConfig}
+                        setBlackConfig={setBlackConfig}
+                    />
                     <SimulationControls
                         startGame={showCountdownOverlay}
                         pauseGame={pauseGame}
@@ -117,7 +134,14 @@ function Index() {
                     {(matchStatus == "IN_PROGRESS" ||
                         matchStatus == "PAUSED" ||
                         matchStatus == "COMPLETED") && <MatchInfo match={match} />}
-                    {/* <DecisionPanel /> */}
+                    <StatsPanel
+                        whiteAlgorithm={whiteAlgorithm}
+                        blackAlgorithm={blackAlgorithm}
+                        whiteMode={whiteMode}
+                        blackMode={blackMode}
+                        whiteStats={whiteStats}
+                        blackStats={blackStats}
+                    />
                     {
                         <MatchStatistics
                             match={match}

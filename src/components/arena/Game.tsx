@@ -7,40 +7,91 @@ import {
     getRandomCapture,
     matchToEngineState,
 } from "../../utilities/helperFunctions";
-import { NeuralNetwork } from "./neuralNetwork";
+import { NeuralNetwork, STORAGE_PREFIX, clearSavedNetworks } from "./neuralNetwork";
 import { SearchTDAgent, TDAgent,RandomAgent } from "@/rl/agents";
 import { Algorithm } from "@/types/Algorithm";
+import {
+    AgentConfig,
+    DEFAULT_AGENT_CONFIG,
+    architectureKey,
+    usesNetwork,
+} from "@/types/AgentConfig";
+import { EpisodeStats } from "@/rl/episodeStats";
 
 /** Max full moves before the arena calls a draw (stops endless shuffling). */
 export const MAX_ARENA_MOVES = 200;
 /**
- * Plies of lookahead for Algorithm.TD_SEARCH.
+ * Default plies of lookahead. Each agent now sets its own search depth in the
+ * configuration panel; this is only the starting value.
  *
- * 2 is the safe default: a few hundred ms per move, and it already quadruples
- * the score against alpha-beta d2 versus greedy. Depth 3 is far stronger
- * (0.545 vs alpha-beta d2, beating it outright) but costs 0.2-0.4 s per move
- * headless and more in a browser, so raise this only if the UI can wait.
+ * Depth 2 costs a few hundred ms per move and already quadruples the score
+ * against alpha-beta d2 compared with greedy. Depth 3 is far stronger (0.545
+ * against alpha-beta d2, beating it outright) but costs 0.2-0.4 s per move
+ * headless and more in a browser.
  */
-export const ARENA_SEARCH_DEPTH = 2;
+export const ARENA_SEARCH_DEPTH = DEFAULT_AGENT_CONFIG.searchDepth;
 
 /*
  * One network per colour, shared across episodes, so training carries over
  * from game to game without reloading (and leaking) a new model every match.
  */
 const sharedNetworks = new Map<string, NeuralNetwork>();
+/** One stats collector per colour, living across the episodes of a session. */
+const sharedStats = new Map<string, EpisodeStats>();
 
-function getSharedNetwork(key: string): NeuralNetwork {
+/**
+ * One network per colour *and architecture*. Including the architecture means
+ * switching to 32,32 starts a fresh network instead of failing to load the
+ * 64,64 weights, and switching back finds the old ones still there.
+ */
+function getSharedNetwork(key: string, config: AgentConfig): NeuralNetwork {
     let net = sharedNetworks.get(key);
     if (!net) {
-        net = new NeuralNetwork();
+        net = new NeuralNetwork({ hidden: config.hiddenLayers, activation: config.activation });
         const created = net;
         if (!created.loadFromLocalStorage(key)) {
-            // Nothing trained in this browser yet: start from the shipped weights.
+            // Nothing saved for this architecture: start from the shipped
+            // weights, which only fit if the shape matches. Otherwise the
+            // network keeps its fresh random initialisation.
             void created.loadPretrained();
         }
         sharedNetworks.set(key, created);
     }
     return net;
+}
+
+function getSharedStats(key: string, training: boolean): EpisodeStats {
+    const existing = sharedStats.get(key);
+    // A mode change starts a different kind of record, so don't mix them.
+    if (existing && existing.training === training) return existing;
+    const fresh = new EpisodeStats(training);
+    sharedStats.set(key, fresh);
+    return fresh;
+}
+
+/** Everything one side of the board is configured with. */
+export type AgentSetup = {
+    algorithm: Algorithm;
+    mode: AgentMode;
+    config: AgentConfig;
+};
+
+/** Stats for the current session, by colour. Read by the dashboard. */
+export function sessionStats(player: Binary): EpisodeStats | null {
+    return sharedStats.get(statsKey(player)) ?? null;
+}
+
+const statsKey = (player: Binary) => (player === 0 ? "white" : "black");
+
+/**
+ * Drops the in-memory networks and stats, and the saved copies in
+ * localStorage, so the next session genuinely starts over from
+ * public/models/td-agent.json rather than continuing where it left off.
+ */
+export function resetLearning(): number {
+    sharedNetworks.clear();
+    sharedStats.clear();
+    return clearSavedNetworks();
 }
 
 export type Binary = 0 | 1;
@@ -162,43 +213,92 @@ class Agent {
     public td: TDAgent;
     /** Same network, played through a search. Used by Algorithm.TD_SEARCH. */
     public search: SearchTDAgent;
+    public config: AgentConfig;
+    public stats: EpisodeStats;
+    /** Learning rate actually used this episode, after decay. */
+    public alphaNow: number;
+    public epsilonNow: number;
 
-    constructor(Player: Binary, mode: AgentMode, algorithm: string) {
+    constructor(
+        Player: Binary,
+        mode: AgentMode,
+        algorithm: string,
+        config: AgentConfig = DEFAULT_AGENT_CONFIG,
+        episodeIndex = 0,
+        totalEpisodes = 1,
+    ) {
         this.name = algorithm;
         this.Player = Player;
         this.mode = mode;
         this.Cows = 12;
         this.placingCows = 12;
-        this.network = getSharedNetwork(Agent.getNetworkStorageKey(Player));
-        // Training: explore 10% of the time and learn. Playing: greedy, no learning.
+        this.config = config;
+
+        const training = mode === 0 && usesNetwork(algorithm as Algorithm);
+        this.network = getSharedNetwork(Agent.getNetworkStorageKey(Player, config), config);
+        this.stats = getSharedStats(statsKey(Player), training);
+
+        // Linear decay across the session: a step size that works early is too
+        // coarse late. With alphaFinal === alpha this is simply constant.
+        const t = totalEpisodes > 1 ? Math.min(1, episodeIndex / (totalEpisodes - 1)) : 0;
+        this.alphaNow = config.alpha + (config.alphaFinal - config.alpha) * t;
+        this.epsilonNow = training ? config.epsilon : 0;
+
         this.td = new TDAgent(this.network, {
-            learn: mode === 0,
-            epsilon: mode === 0 ? 0.1 : 0,
+            learn: training,
+            alpha: this.alphaNow,
+            gamma: config.gamma,
+            lambda: config.lambda,
+            epsilon: this.epsilonNow,
         });
         this.td.startGame(Player);
-        this.search = new SearchTDAgent(this.network, ARENA_SEARCH_DEPTH);
+        this.search = new SearchTDAgent(this.network, config.searchDepth);
         this.search.startGame(Player);
+    }
+
+    /** True when this agent is learning from the games it plays. */
+    public get isTraining(): boolean {
+        return this.mode === 0 && usesNetwork(this.name as Algorithm);
     }
 
     /** Final TD update for this agent once the game is decided. */
     public finishGame(match: Match): void {
-        if (this.name !== "Standard" && this.name !== "TD") return;
-        if (this.mode !== 0) return;
+        if (!this.isTraining) return;
         const final = matchToEngineState(match);
         final.result = match.winner === null ? 2 : match.winner;
         this.td.endGame(final);
     }
 
-    private static getNetworkStorageKey(player: Binary): string {
+    /**
+     * Records this episode. Training agents get the full learning diagnostics;
+     * agents that are only playing get their results.
+     */
+    public recordEpisode(match: Match): void {
+        const result =
+            match.winner === null ? 0 : match.winner === this.Player ? 1 : -1;
+        const plies = match.moveCounter();
+        if (this.isTraining) {
+            this.stats.addTraining({
+                result,
+                plies,
+                stats: this.td.drainStats(),
+                net: this.network,
+                alpha: this.alphaNow,
+                epsilon: this.epsilonNow,
+            });
+        } else {
+            this.stats.addPlay(result, plies);
+        }
+    }
+
+    private static getNetworkStorageKey(player: Binary, config: AgentConfig): string {
         const side = player === 0 ? "white" : "black";
-        return `morabaraba-neural-network-${side}`;
+        return `${STORAGE_PREFIX}-${side}-${architectureKey(config)}`;
     }
 
     public saveTrainingNetwork(): void {
-        
-        if (this.mode !== 0) return;
-        if (this.name !== "Standard" && this.name !== "TD") return;
-        this.network.saveToLocalStorage(Agent.getNetworkStorageKey(this.Player));
+        if (!this.isTraining) return;
+        this.network.saveToLocalStorage(Agent.getNetworkStorageKey(this.Player, this.config));
     }
 
     public getName(): string {
@@ -287,16 +387,14 @@ export class Match {
     private trainingNetworksSaved: boolean;
 
     constructor(
-        whiteAlgorithm: string,
-        blackAlgorithm: string,
-        whiteMode: AgentMode = 1,
-        blackMode: AgentMode = 1,
+        white: AgentSetup,
+        black: AgentSetup,
+        /** 0-based index of this episode, used for the decay schedule. */
+        episodeIndex = 0,
+        totalEpisodes = 1,
     ) {
-        this.White = new Agent(0, whiteMode, whiteAlgorithm);
-        this.Black = new Agent(1, blackMode, blackAlgorithm);
-
-        this.White.name = whiteAlgorithm;
-        this.Black.name = blackAlgorithm;
+        this.White = new Agent(0, white.mode, white.algorithm, white.config, episodeIndex, totalEpisodes);
+        this.Black = new Agent(1, black.mode, black.algorithm, black.config, episodeIndex, totalEpisodes);
 
         this.state = new State(0);
 
@@ -448,8 +546,12 @@ export class Match {
     private endGame(winner: Binary | null): boolean {
         this.winner = winner;
         if (!this.trainingNetworksSaved) {
+            // Terminal TD update first, then record, then persist: the stats row
+            // has to see the weights as they are after the final update.
             this.White.finishGame(this);
             this.Black.finishGame(this);
+            this.White.recordEpisode(this);
+            this.Black.recordEpisode(this);
             this.White.saveTrainingNetwork();
             this.Black.saveTrainingNetwork();
             this.trainingNetworksSaved = true;

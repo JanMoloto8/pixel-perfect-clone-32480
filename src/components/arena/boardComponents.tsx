@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
     Activity,
     BarChart3,
@@ -7,6 +8,7 @@ import {
     Play,
     RefreshCw,
     RotateCcw,
+    Trash2,
     User,
 } from "lucide-react";
 import { Disc, Panel, Row } from "./panels";
@@ -150,96 +152,65 @@ type Props = {
     setEpisodeCount: (value: number) => void;
 };
 
-export function MatchConfiguration({
+export function SessionConfiguration({
     matchStatus,
-    whiteAlgorithm,
-    blackAlgorithm,
-    whiteMode,
-    blackMode,
-    setWhiteAlgorithm,
-    setBlackAlgorithm,
-    setWhiteMode,
-    setBlackMode,
     episodeCount,
     setEpisodeCount,
-}: Props) {
+    clearTrainedNetworks,
+}: {
+    matchStatus: MatchStatus;
+    episodeCount: number;
+    setEpisodeCount: (n: number) => void;
+    clearTrainedNetworks: () => number;
+}) {
     const locked = matchStatus !== "NOT_STARTED";
+    const [cleared, setCleared] = useState<number | null>(null);
 
     return (
-        <Panel title="Match Configuration">
+        <Panel title="Session">
             <div className="space-y-4 p-4">
-                <div>
-                    <label className="mb-2 block text-sm font-semibold">White Agent</label>
-
-                    <select
+                <label className="block">
+                    <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        Episodes
+                    </span>
+                    <input
+                        type="number"
+                        min={1}
+                        step={1}
                         disabled={locked}
-                        value={whiteAlgorithm}
-                        onChange={(e) => setWhiteAlgorithm(e.target.value)}
-                        className="w-full rounded-md border border-border bg-panel px-3 py-2 disabled:opacity-50"
-                    >
-                        <option>TD</option>
-                        <option>TD + Minimax</option>
-                        <option>Minimax</option>
-                        <option>Random</option>
-                    </select>
-                </div>
+                        value={episodeCount}
+                        onChange={(e) => setEpisodeCount(Math.max(1, Number(e.target.value) || 1))}
+                        className="w-full rounded-md border border-border bg-panel px-3 py-2 text-sm outline-none transition focus:border-info disabled:opacity-50"
+                    />
+                    <span className="mt-1 block text-[11px] leading-snug text-muted-foreground/70">
+                        Games played back to back. The learning-rate decay is spread across this many.
+                    </span>
+                </label>
 
-                <div>
-                    <label className="mb-2 block text-sm font-semibold">Black Agent</label>
-
-                    <select
+                <div className="rounded-md border border-border/70 bg-panel/40 p-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        Saved networks
+                    </h3>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground/80">
+                        Training continues from the weights saved in this browser. Clear them to start a new
+                        run from the shipped <code className="text-info">td-agent.json</code> instead.
+                    </p>
+                    <button
+                        type="button"
                         disabled={locked}
-                        value={blackAlgorithm}
-                        onChange={(e) => setBlackAlgorithm(e.target.value)}
-                        className="w-full rounded-md border border-border bg-panel px-3 py-2 disabled:opacity-50"
+                        onClick={() => setCleared(clearTrainedNetworks())}
+                        className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-md border border-danger/50 bg-danger/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-danger transition hover:bg-danger/20 disabled:opacity-40"
                     >
-                        <option>TD</option>
-                        <option>TD + Minimax</option>
-                        <option>Minimax</option>
-                        <option>Random</option>
-                    </select>
-                </div>
-                
-                    <div>
-                        <label htmlFor="episode-count" className="mb-2 block text-sm font-semibold">
-                            Episodes
-                        </label>
-                        <input
-                            id="episode-count"
-                            type="number"
-                            min={1}
-                            step={1}
-                            disabled={locked}
-                            value={episodeCount}
-                            onChange={(e) => setEpisodeCount(Math.max(1, Number(e.target.value) || 1))}
-                            className="w-full rounded-md border border-border bg-panel px-3 py-2 disabled:opacity-50"
-                        />
-                    </div>
-
-                <div>
-                    <label className="mb-2 block text-sm font-semibold">White Agent Mode</label>
-                    <select
-                        disabled={locked}
-                        value={whiteMode}
-                        onChange={(e) => setWhiteMode(Number(e.target.value) as AgentMode)}
-                        className="w-full rounded-md border border-border bg-panel px-3 py-2 disabled:opacity-50"
-                    >
-                        <option value={0}>Training</option>
-                        <option value={1}>Playing</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label className="mb-2 block text-sm font-semibold">Black Agent Mode</label>
-                    <select
-                        disabled={locked}
-                        value={blackMode}
-                        onChange={(e) => setBlackMode(Number(e.target.value) as AgentMode)}
-                        className="w-full rounded-md border border-border bg-panel px-3 py-2 disabled:opacity-50"
-                    >
-                        <option value={0}>Training</option>
-                        <option value={1}>Playing</option>
-                    </select>
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Clear trained networks
+                    </button>
+                    {cleared !== null ? (
+                        <p className="mt-2 text-[11px] text-success">
+                            {cleared === 0
+                                ? "Nothing was saved. The next run starts from td-agent.json."
+                                : `Removed ${cleared} saved network${cleared === 1 ? "" : "s"}. The next run starts from td-agent.json.`}
+                        </p>
+                    ) : null}
                 </div>
             </div>
         </Panel>

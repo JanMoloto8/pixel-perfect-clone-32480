@@ -3,9 +3,12 @@ import { FEATURE_SIZE } from "./features";
 
 export type SerializedWeights = { shape: number[]; values: number[] }[];
 
+/** tfjs activation names the net accepts. */
+export type NetActivation = "relu" | "tanh" | "sigmoid" | "elu" | "selu" | "softplus" | "swish" | "linear";
+
 export type ValueNetConfig = {
     hidden: number[];
-    activation: "relu" | "tanh";
+    activation: NetActivation;
     seed?: number;
 };
 
@@ -152,7 +155,11 @@ export class ValueNet {
 
     /** Fraction of hidden units that output exactly 0 for every row (dead ReLUs). */
     deadUnitFraction(xs: Float32Array, n: number): number[] {
-        if (this.config.activation !== "relu") return this.config.hidden.map(() => 0);
+        // Only ReLU can pin a unit at exactly 0 forever. For tanh, sigmoid, elu
+        // and friends a 0 output is ordinary, so "dead" is not a meaningful
+        // measure - measuresDeadUnits() lets a caller show "n/a" rather than a
+        // misleading 0.
+        if (!this.measuresDeadUnits()) return this.config.hidden.map(() => 0);
         return tf.tidy(() => {
             let h: tf.Tensor = tf.tensor2d(xs.subarray(0, n * FEATURE_SIZE), [n, FEATURE_SIZE]);
             const out: number[] = [];
@@ -163,6 +170,11 @@ export class ValueNet {
             }
             return out;
         });
+    }
+
+    /** Whether deadUnitFraction reports something meaningful for this activation. */
+    measuresDeadUnits(): boolean {
+        return this.config.activation === "relu";
     }
 
     weightL2(): number {

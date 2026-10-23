@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { AgentMode, Match } from "../components/arena/Game";
+import { AgentMode, AgentSetup, Match, resetLearning, sessionStats } from "../components/arena/Game";
 import { Algorithm } from "@/types/Algorithm";
+import { AgentConfig, DEFAULT_AGENT_CONFIG, clampConfig } from "@/types/AgentConfig";
+import { StatsRow } from "@/rl/episodeStats";
 
 type MatchStatus = "NOT_STARTED" | "IN_PROGRESS" | "PAUSED" | "COMPLETED";
 
@@ -18,13 +20,32 @@ export function useMatchTimer() {
     const [draws, setDraws] = useState(0);
     const [episodeCount, setEpisodeCount] = useState(1);
     const [episodesCompleted, setEpisodesCompleted] = useState(0);
+    const [whiteConfig, setWhiteConfigRaw] = useState<AgentConfig>(DEFAULT_AGENT_CONFIG);
+    const [blackConfig, setBlackConfigRaw] = useState<AgentConfig>(DEFAULT_AGENT_CONFIG);
+    /** Bumped whenever a stats row is appended, so panels re-render. */
+    const [statsVersion, setStatsVersion] = useState(0);
     const canChangeAlgorithms = matchStatus === "NOT_STARTED";
+
+    // Settings are read when each episode's Match is built, so changing them
+    // mid-session would silently split a run across two configurations.
+    const setWhiteConfig = (c: AgentConfig) => canChangeAlgorithms && setWhiteConfigRaw(clampConfig(c));
+    const setBlackConfig = (c: AgentConfig) => canChangeAlgorithms && setBlackConfigRaw(clampConfig(c));
 
     const [match, setMatch] = useState<Match | null>(null);
     const [running, setRunning] = useState(false);
     const [, setTick] = useState(0);
     const pendingCapture = useRef<{ match: Match; capture: number } | null>(null);
     const completedEpisodes = useRef(0);
+    /**
+     * The match we have already counted.
+     *
+     * Without this the episode counter double-counts: after a game ends we call
+     * startNextEpisode(), but React does not run the effect cleanup (which
+     * clears this interval) until the re-render commits, so the old interval can
+     * fire once more, still holding the finished match, and count it again. A
+     * "5 episode" session then only plays 3 games.
+     */
+    const countedMatch = useRef<Match | null>(null);
 
     useEffect(() => {
         if (!running) return;
@@ -41,6 +62,10 @@ export function useMatchTimer() {
 
         const interval = setInterval(() => {
             if (match.isGameOver()) {
+                // Only ever count a given match once (see countedMatch).
+                if (countedMatch.current === match) return;
+                countedMatch.current = match;
+
                 if (match.getWinner() === "White") {
                     setWhiteWins((wins) => wins + 1);
                 } else if (match.getWinner() === "Black") {
@@ -50,6 +75,8 @@ export function useMatchTimer() {
                 }
                 completedEpisodes.current += 1;
                 setEpisodesCompleted(completedEpisodes.current);
+                // isGameOver() just recorded this episode's stats row.
+                setStatsVersion((v) => v + 1);
 
                 if (completedEpisodes.current < episodeCount) {
                     startNextEpisode();
@@ -88,12 +115,15 @@ export function useMatchTimer() {
 
     function startGame() {
         completedEpisodes.current = 0;
+        countedMatch.current = null;
         setEpisodesCompleted(0);
         startNextEpisode();
     }
 
     function startNextEpisode() {
-        const newMatch = new Match(whiteAlgorithm, blackAlgorithm, whiteMode, blackMode);
+        const white: AgentSetup = { algorithm: whiteAlgorithm, mode: whiteMode, config: whiteConfig };
+        const black: AgentSetup = { algorithm: blackAlgorithm, mode: blackMode, config: blackConfig };
+        const newMatch = new Match(white, black, completedEpisodes.current, episodeCount);
 
         pendingCapture.current = null;
         setMatch(newMatch);
@@ -115,6 +145,7 @@ export function useMatchTimer() {
     function resetGame() {
         completedEpisodes.current = 0;
         pendingCapture.current = null;
+        countedMatch.current = null;
         setMatch(null);
         setMatchStatus("NOT_STARTED");
         setRunning(false);
@@ -127,6 +158,22 @@ export function useMatchTimer() {
         setBlackWins(0);
         setDraws(0);
     }
+
+    /**
+     * Forgets the trained networks, in memory and in localStorage, so the next
+     * session starts from the shipped td-agent.json instead of continuing.
+     */
+    function clearTrainedNetworks(): number {
+        const removed = resetLearning();
+        resetStatistics();
+        setEpisodesCompleted(0);
+        completedEpisodes.current = 0;
+        setStatsVersion((v) => v + 1);
+        return removed;
+    }
+
+    const whiteStats: StatsRow[] = sessionStats(0)?.rows ?? [];
+    const blackStats: StatsRow[] = sessionStats(1)?.rows ?? [];
 
     function showCountdownOverlay() {
         setShowCountdown(true);
@@ -161,5 +208,13 @@ export function useMatchTimer() {
         resumeGame,
         resetGame,
         resetStatistics,
+        whiteConfig,
+        blackConfig,
+        setWhiteConfig,
+        setBlackConfig,
+        clearTrainedNetworks,
+        whiteStats,
+        blackStats,
+        statsVersion,
     };
 }
