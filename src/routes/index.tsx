@@ -76,6 +76,7 @@ function Index() {
         setWhiteConfig,
         setBlackConfig,
         clearTrainedNetworks,
+        clearAgentStats,
         whiteStats,
         blackStats,
     } = useMatchTimer();
@@ -141,6 +142,7 @@ function Index() {
                         blackMode={blackMode}
                         whiteStats={whiteStats}
                         blackStats={blackStats}
+                        onClearStats={clearAgentStats}
                     />
                     {
                         <MatchStatistics

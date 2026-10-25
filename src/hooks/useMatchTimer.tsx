@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AgentMode, AgentSetup, Match, resetLearning, sessionStats } from "../components/arena/Game";
+import { AgentMode, AgentSetup, Binary, Match, resetLearning, resetStats, sessionStats } from "../components/arena/Game";
 import { Algorithm } from "@/types/Algorithm";
 import { AgentConfig, DEFAULT_AGENT_CONFIG, clampConfig } from "@/types/AgentConfig";
 import { StatsRow } from "@/rl/episodeStats";
@@ -172,6 +172,12 @@ export function useMatchTimer() {
         return removed;
     }
 
+    /** Clears just the stats for one side, keeping the trained network. */
+    function clearAgentStats(player: Binary): void {
+        resetStats(player);
+        setStatsVersion((v) => v + 1);
+    }
+
     const whiteStats: StatsRow[] = sessionStats(0)?.rows ?? [];
     const blackStats: StatsRow[] = sessionStats(1)?.rows ?? [];
 
@@ -213,6 +219,7 @@ export function useMatchTimer() {
         setWhiteConfig,
         setBlackConfig,
         clearTrainedNetworks,
+        clearAgentStats,
         whiteStats,
         blackStats,
         statsVersion,

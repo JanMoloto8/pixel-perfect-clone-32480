@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Algorithm } from "@/types/Algorithm";
 import { StatsRow, TrainingStatsRow, isTrainingRow } from "@/rl/episodeStats";
-import type { AgentMode } from "./Game";
+import type { AgentMode, Binary } from "./Game";
+import { resetStats } from "./Game";
 import { Panel } from "./panels";
 
 /** Above this many episodes the charts are thinned out so they stay smooth. */
@@ -255,11 +256,13 @@ function SideStats({
     algorithm,
     mode,
     rows,
+    onClear,
 }: {
     side: "White" | "Black";
     algorithm: Algorithm;
     mode: AgentMode;
     rows: StatsRow[];
+    onClear: () => void;
 }) {
     if (rows.length === 0) {
         return (
@@ -282,16 +285,25 @@ function SideStats({
                     {algorithm} · {mode === 0 ? "training" : "playing"} · {rows.length} episode
                     {rows.length === 1 ? "" : "s"}
                 </p>
-                <button
-                    type="button"
-                    onClick={() => {
-                        const csv = csvFor(rows);
-                        download(`${side.toLowerCase()}-${training ? "training" : "play"}-stats.csv`, csv);
-                    }}
-                    className="shrink-0 rounded-md border border-info/50 bg-info/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-info transition hover:bg-info/20"
-                >
-                    Export CSV
-                </button>
+                <div className="flex shrink-0 gap-1.5">
+                    <button
+                        type="button"
+                        onClick={onClear}
+                        className="rounded-md border border-danger/50 bg-danger/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-danger transition hover:bg-danger/20"
+                    >
+                        Clear
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const csv = csvFor(rows);
+                            download(`${side.toLowerCase()}-${training ? "training" : "play"}-stats.csv`, csv);
+                        }}
+                        className="rounded-md border border-info/50 bg-info/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-info transition hover:bg-info/20"
+                    >
+                        Export CSV
+                    </button>
+                </div>
             </div>
 
             <div className="grid grid-cols-3 gap-2">
@@ -377,6 +389,7 @@ export function StatsPanel({
     blackMode,
     whiteStats,
     blackStats,
+    onClearStats,
 }: {
     whiteAlgorithm: Algorithm;
     blackAlgorithm: Algorithm;
@@ -384,6 +397,7 @@ export function StatsPanel({
     blackMode: AgentMode;
     whiteStats: StatsRow[];
     blackStats: StatsRow[];
+    onClearStats: (player: Binary) => void;
 }) {
     // Open on whichever side is learning: that is the one worth watching.
     const [side, setSide] = useState<"white" | "black">(whiteMode === 0 ? "white" : blackMode === 0 ? "black" : "white");
@@ -415,9 +429,9 @@ export function StatsPanel({
                 </div>
 
                 {isWhite ? (
-                    <SideStats side="White" algorithm={whiteAlgorithm} mode={whiteMode} rows={whiteStats} />
+                    <SideStats side="White" algorithm={whiteAlgorithm} mode={whiteMode} rows={whiteStats} onClear={() => onClearStats(0)} />
                 ) : (
-                    <SideStats side="Black" algorithm={blackAlgorithm} mode={blackMode} rows={blackStats} />
+                    <SideStats side="Black" algorithm={blackAlgorithm} mode={blackMode} rows={blackStats} onClear={() => onClearStats(1)} />
                 )}
             </div>
         </Panel>

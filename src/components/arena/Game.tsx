@@ -81,6 +81,18 @@ export function sessionStats(player: Binary): EpisodeStats | null {
     return sharedStats.get(statsKey(player)) ?? null;
 }
 
+/** Clears only the recorded stats for one side, without touching the network. */
+export function resetStats(player: Binary): void {
+    const key = statsKey(player);
+    const existing = sharedStats.get(key);
+    if (existing) existing.reset();
+}
+
+/** Clears stats for both sides, without touching networks. */
+export function resetAllStats(): void {
+    sharedStats.forEach((s) => s.reset());
+}
+
 const statsKey = (player: Binary) => (player === 0 ? "white" : "black");
 
 /**
