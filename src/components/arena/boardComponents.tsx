@@ -193,7 +193,7 @@ export function SessionConfiguration({
                     </h3>
                     <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground/80">
                         Training continues from the weights saved in this browser. Clear them to start a new
-                        run from the shipped <code className="text-info">td-agent.json</code> instead.
+                        run from fresh random weights.
                     </p>
                     <button
                         type="button"
@@ -207,8 +207,8 @@ export function SessionConfiguration({
                     {cleared !== null ? (
                         <p className="mt-2 text-[11px] text-success">
                             {cleared === 0
-                                ? "Nothing was saved. The next run starts from td-agent.json."
-                                : `Removed ${cleared} saved network${cleared === 1 ? "" : "s"}. The next run starts from td-agent.json.`}
+                                ? "Nothing was saved. The next run starts from random weights."
+                                : `Removed ${cleared} saved network${cleared === 1 ? "" : "s"}. The next run starts from random weights.`}
                         </p>
                     ) : null}
                 </div>

@@ -12,9 +12,6 @@ export const STORAGE_VERSION = "v2";
 /** Prefix shared by every saved network, so they can all be cleared at once. */
 export const STORAGE_PREFIX = "morabaraba-neural-network";
 
-/** Trained weights shipped with the site (see scripts/train.ts). */
-export const PRETRAINED_URL = "/models/td-agent.json";
-
 export class NeuralNetwork extends ValueNet {
     constructor(config: ValueNetConfig = DEFAULT_NET_CONFIG) {
         super(config);
@@ -32,7 +29,7 @@ export class NeuralNetwork extends ValueNet {
     /**
      * Returns false when there is nothing saved, or when what is saved has a
      * different shape (because the architecture was changed since). The caller
-     * then falls back to the shipped weights or fresh ones.
+     * then keeps the fresh random initialisation.
      */
     public loadFromLocalStorage(key: string): boolean {
         if (typeof localStorage === "undefined") return false;
@@ -45,26 +42,13 @@ export class NeuralNetwork extends ValueNet {
         }
     }
 
-    /** Loads the shipped pre-trained weights. Resolves false if they are missing. */
-    public async loadPretrained(url: string = PRETRAINED_URL): Promise<boolean> {
-        if (typeof fetch === "undefined") return false;
-        try {
-            const res = await fetch(url);
-            if (!res.ok) return false;
-            return this.loadJSON((await res.json()) as SerializedWeights);
-        } catch {
-            return false;
-        }
-    }
 }
 
 /**
  * Forgets every network saved in this browser.
  *
- * After this the next session starts from public/models/td-agent.json (or from
- * fresh random weights if the architecture does not match the shipped one),
- * which is how you begin a genuinely new training run rather than continuing
- * the previous one.
+ * After this the next session starts from fresh random weights, which is how
+ * you begin a genuinely new training run rather than continuing the previous one.
  */
 export function clearSavedNetworks(): number {
     if (typeof localStorage === "undefined") return 0;

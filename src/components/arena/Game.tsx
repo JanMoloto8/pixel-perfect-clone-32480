@@ -48,14 +48,10 @@ function getSharedNetwork(key: string, config: AgentConfig): NeuralNetwork {
     let net = sharedNetworks.get(key);
     if (!net) {
         net = new NeuralNetwork({ hidden: config.hiddenLayers, activation: config.activation });
-        const created = net;
-        if (!created.loadFromLocalStorage(key)) {
-            // Nothing saved for this architecture: start from the shipped
-            // weights, which only fit if the shape matches. Otherwise the
-            // network keeps its fresh random initialisation.
-            void created.loadPretrained();
-        }
-        sharedNetworks.set(key, created);
+        // Try to resume from a previously saved network in localStorage.
+        // If nothing is saved, the network keeps its fresh random initialisation.
+        net.loadFromLocalStorage(key);
+        sharedNetworks.set(key, net);
     }
     return net;
 }
@@ -97,8 +93,8 @@ const statsKey = (player: Binary) => (player === 0 ? "white" : "black");
 
 /**
  * Drops the in-memory networks and stats, and the saved copies in
- * localStorage, so the next session genuinely starts over from
- * public/models/td-agent.json rather than continuing where it left off.
+ * localStorage, so the next session starts from fresh random weights
+ * rather than continuing where it left off.
  */
 export function resetLearning(): number {
     sharedNetworks.clear();

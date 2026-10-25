@@ -161,7 +161,7 @@ export function useMatchTimer() {
 
     /**
      * Forgets the trained networks, in memory and in localStorage, so the next
-     * session starts from the shipped td-agent.json instead of continuing.
+     * session starts from fresh random weights instead of continuing.
      */
     function clearTrainedNetworks(): number {
         const removed = resetLearning();

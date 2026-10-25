@@ -27,7 +27,7 @@ The agents did not learn, and most gradients were zero, because of several probl
   - `RandomAgent` and `AlphaBetaAgent` (depth 1–3) are the baselines.
 - The website (`Game.tsx`, `helperFunctions.tsx`, `neuralNetwork.tsx`) now uses the same agent:
   - Old saved weights are ignored (new storage key `-v2`).
-  - If nothing has been trained in the browser yet, it loads `public/models/td-agent.json`, a model trained by self-play.
+  - If nothing has been trained in the browser yet, the network starts from fresh random weights (Glorot uniform initialisation).
 
 ## Running things
 
