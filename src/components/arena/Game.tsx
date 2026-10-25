@@ -254,7 +254,7 @@ class Agent {
         // coarse late. With alphaFinal === alpha this is simply constant.
         const t = totalEpisodes > 1 ? Math.min(1, episodeIndex / (totalEpisodes - 1)) : 0;
         this.alphaNow = config.alpha + (config.alphaFinal - config.alpha) * t;
-        this.epsilonNow = training ? config.epsilon : 0;
+        this.epsilonNow = training ? config.epsilon + (config.epsilonFinal - config.epsilon) * t : 0;
 
         this.td = new TDAgent(this.network, {
             learn: training,

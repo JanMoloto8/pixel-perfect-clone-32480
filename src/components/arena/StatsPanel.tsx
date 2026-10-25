@@ -1,10 +1,45 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Algorithm } from "@/types/Algorithm";
 import { StatsRow, TrainingStatsRow, isTrainingRow } from "@/rl/episodeStats";
 import type { AgentMode, Binary } from "./Game";
 import { resetStats } from "./Game";
 import { Panel } from "./panels";
+
+/** Grab the SVG inside a container, render it on a canvas, and trigger a PNG download. */
+function saveSvgAsPng(container: HTMLElement, filename: string): void {
+    const svg = container.querySelector("svg");
+    if (!svg) return;
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    // Inline computed styles so the PNG looks the same outside the page.
+    const styles = getComputedStyle(document.documentElement);
+    const bg = styles.getPropertyValue("--panel").trim() || "#1a1a2e";
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.style.backgroundColor = `oklch(${bg})`;
+    const xml = new XMLSerializer().serializeToString(clone);
+    const blob = new Blob([xml], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+        const scale = 2; // retina-quality
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext("2d")!;
+        ctx.scale(scale, scale);
+        ctx.drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+        canvas.toBlob((b) => {
+            if (!b) return;
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(b);
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(a.href);
+        }, "image/png");
+    };
+    img.src = url;
+}
 
 /** Above this many episodes the charts are thinned out so they stay smooth. */
 const MAX_POINTS = 300;
@@ -40,21 +75,31 @@ function MiniChart({
     domain?: [number | "auto", number | "auto"];
     zeroLine?: boolean;
 }) {
+    const chartRef = useRef<HTMLDivElement>(null);
     const hasRight = series.some((s) => s.axis === "right");
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
     return (
         <div className="rounded-lg border border-border/70 bg-panel/50 p-3">
             <div className="mb-1 flex items-baseline justify-between gap-2">
                 <h4 className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">{title}</h4>
-                <div className="flex shrink-0 gap-2">
+                <div className="flex shrink-0 items-center gap-2">
                     {series.map((s) => (
                         <span key={s.key} className="flex items-center gap-1 text-[10px] text-muted-foreground">
                             <span className="h-1.5 w-3 rounded-full" style={{ background: s.color }} />
                             {s.label}
                         </span>
                     ))}
+                    <button
+                        type="button"
+                        title="Save chart as PNG"
+                        onClick={() => chartRef.current && saveSvgAsPng(chartRef.current, `${slug}.png`)}
+                        className="ml-1 rounded p-0.5 text-muted-foreground/60 transition hover:text-info"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    </button>
                 </div>
             </div>
-            <div className="h-28 w-full">
+            <div ref={chartRef} className="h-28 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={data} margin={{ top: 4, right: 6, bottom: 0, left: -18 }}>
                         <CartesianGrid stroke="var(--border)" strokeDasharray="2 4" vertical={false} />

@@ -23,8 +23,10 @@ export type AgentConfig = {
     gamma: number;
     /** Eligibility-trace decay. 0 = TD(0); 1 credits the whole episode. */
     lambda: number;
-    /** Exploration rate while training. */
+    /** Exploration rate at the first episode. */
     epsilon: number;
+    /** Exploration rate at the last episode; linearly interpolated. */
+    epsilonFinal: number;
     /** Plies of lookahead. Only used by TD + Minimax and Minimax. */
     searchDepth: number;
     activation: ActivationName;
@@ -38,6 +40,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
     gamma: 0.99,
     lambda: 0,
     epsilon: 0.1,
+    epsilonFinal: 0.01,
     searchDepth: 2,
     activation: "relu",
     hiddenLayers: [64, 64],
@@ -79,6 +82,7 @@ export function clampConfig(cfg: AgentConfig): AgentConfig {
         gamma: clamp(cfg.gamma, 0, 1, 0.99),
         lambda: clamp(cfg.lambda, 0, 1, 0),
         epsilon: clamp(cfg.epsilon, 0, 1, 0.1),
+        epsilonFinal: clamp(cfg.epsilonFinal, 0, 1, 0.01),
         searchDepth: Math.round(clamp(cfg.searchDepth, 1, 4, 2)),
         activation: cfg.activation,
         hiddenLayers: layers.length ? layers : [64],

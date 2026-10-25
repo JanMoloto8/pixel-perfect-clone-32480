@@ -240,16 +240,29 @@ function AgentFields({
                         />
                     </div>
 
-                    <NumberField
-                        label="Epsilon ε"
-                        hint="Exploration while training. Playing agents are always greedy."
-                        value={config.epsilon}
-                        onChange={(n) => patch({ epsilon: n })}
-                        min={0}
-                        max={1}
-                        step={0.01}
-                        disabled={locked || !training}
-                    />
+                    <div className="grid grid-cols-2 gap-3">
+                        <NumberField
+                            label="Epsilon ε"
+                            value={config.epsilon}
+                            onChange={(n) => patch({ epsilon: n })}
+                            min={0}
+                            max={1}
+                            step={0.01}
+                            disabled={locked || !training}
+                        />
+                        <NumberField
+                            label="Final ε"
+                            value={config.epsilonFinal}
+                            onChange={(n) => patch({ epsilonFinal: n })}
+                            min={0}
+                            max={1}
+                            step={0.01}
+                            disabled={locked || !training}
+                        />
+                    </div>
+                    <span className="-mt-2 block text-[11px] leading-snug text-muted-foreground/70">
+                        ε decays linearly from the first episode to the last. Playing agents are always greedy (ε = 0).
+                    </span>
 
                     <label className="block">
                         <span className={labelClass}>Activation</span>
