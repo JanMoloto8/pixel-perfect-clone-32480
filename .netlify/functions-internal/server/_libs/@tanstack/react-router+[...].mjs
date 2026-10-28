@@ -1,7 +1,7 @@
 import { i as __require, o as __toESM, t as __commonJSMin } from "../../_runtime.mjs";
-import { a as require_jsx_runtime, o as require_react } from "../@radix-ui/react-collection+[...].mjs";
+import { l as require_react_dom, u as require_react } from "../@floating-ui/react-dom+[...].mjs";
 import { r as parseHref } from "../tanstack__history.mjs";
-import { n as require_react_dom } from "../@radix-ui/react-primitive+[...].mjs";
+import { p as require_jsx_runtime } from "../@radix-ui/react-checkbox+[...].mjs";
 import { PassThrough, Readable } from "node:stream";
 import { ReadableStream as ReadableStream$1 } from "node:stream/web";
 //#region node_modules/@tanstack/react-router/dist/esm/utils.js

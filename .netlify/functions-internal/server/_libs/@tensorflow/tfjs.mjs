@@ -32533,6 +32533,30 @@ function getConstraint(identifier) {
 * https://opensource.org/licenses/MIT.
 * =============================================================================
 */
+/**
+* Initializer that generates values initialized to some constant.
+*
+* @doc {heading: 'Initializers', namespace: 'initializers'}
+*/
+function constant(args) {
+	return new Constant(args);
+}
+/**
+* Glorot uniform initializer, also called Xavier uniform initializer.
+* It draws samples from a uniform distribution within [-limit, limit]
+* where `limit` is `sqrt(6 / (fan_in + fan_out))`
+* where `fan_in` is the number of input units in the weight tensor
+* and `fan_out` is the number of output units in the weight tensor
+*
+* Reference:
+*   Glorot & Bengio, AISTATS 2010
+*       http://jmlr.org/proceedings/papers/v9/glorot10a/glorot10a.pdf.
+*
+* @doc {heading: 'Initializers', namespace: 'initializers'}
+*/
+function glorotUniform(args) {
+	return new GlorotUniform(args);
+}
 //#endregion
 //#region node_modules/@tensorflow/tfjs-layers/dist/logs.js
 /**
@@ -75004,4 +75028,4 @@ for (const kernelConfig of kernelConfigs) registerKernel(kernelConfig);
 * =============================================================================
 */
 //#endregion
-export { variableGrads as a, tensor2d as i, sequential as n, tensor as o, train as r, dense as t };
+export { tensor2d as a, zerosLike$2 as c, tensor as d, glorotUniform as i, keep as l, sequential as n, variableGrads as o, constant as r, scalar as s, dense as t, tidy as u };
