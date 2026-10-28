@@ -4,6 +4,7 @@ import {
     BarChart3,
     Clock,
     Flag,
+    FlaskConical,
     Pause,
     Play,
     RefreshCw,
@@ -11,6 +12,7 @@ import {
     Trash2,
     User,
 } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { Disc, Panel, Row } from "./panels";
 import { GameBoard } from "./GameBoard";
 import { movesList } from "@/utilities/helperFunctions";
@@ -62,6 +64,13 @@ export function Header({ matchTime, running, matchStatus }: HeaderProps) {
                             : "NOT STARTED"}
                 </span>
             </div>
+            <Link
+                to="/experiment"
+                className="hidden items-center gap-2 rounded-md border border-border px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground lg:flex"
+            >
+                <FlaskConical className="h-4 w-4" />
+                Experiments
+            </Link>
             <div className="flex shrink-0 items-center gap-6 border-l border-border pl-6">
                 <div className="flex items-center gap-3">
                     <Clock className="h-5 w-5 text-info" />
