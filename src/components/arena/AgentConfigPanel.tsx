@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Algorithm, IMPLEMENTED_ALGORITHMS } from "@/types/Algorithm";
 import {
     ACTIVATIONS,
@@ -11,6 +11,7 @@ import {
 } from "@/types/AgentConfig";
 import type { AgentMode } from "./Game";
 import { Panel } from "./panels";
+import { listSavedArchitectures, type SavedArchitecture } from "./savedArchitectures";
 
 const fieldClass =
     "w-full rounded-md border border-border bg-panel px-3 py-2 text-sm outline-none transition focus:border-info focus:ring-1 focus:ring-info/40 disabled:opacity-50";
@@ -119,6 +120,69 @@ function HiddenLayers({
     );
 }
 
+/** Dropdown for loading experiment-trained weights into this agent. */
+function WeightSelector({
+    config,
+    onApply,
+    locked,
+}: {
+    config: AgentConfig;
+    onApply: (arch: SavedArchitecture) => void;
+    locked: boolean;
+}) {
+    const [archs, setArchs] = useState<SavedArchitecture[]>([]);
+
+    useEffect(() => {
+        setArchs(listSavedArchitectures());
+    }, []);
+
+    if (archs.length === 0) {
+        return (
+            <div>
+                <span className={labelClass}>Load experiment weights</span>
+                <p className="rounded-md border border-border/60 bg-panel/60 px-3 py-2.5 text-xs text-muted-foreground">
+                    No saved weights. Run an experiment to train and save weights.
+                </p>
+            </div>
+        );
+    }
+
+    const currentKey = `${config.hiddenLayers.join("x")}-${config.activation}`;
+
+    return (
+        <div>
+            <span className={labelClass}>Load experiment weights</span>
+            <select
+                disabled={locked}
+                value=""
+                onChange={(e) => {
+                    const idx = Number(e.target.value);
+                    if (!Number.isNaN(idx) && archs[idx]) onApply(archs[idx]);
+                }}
+                className={fieldClass}
+            >
+                <option value="" disabled>
+                    Select saved weights…
+                </option>
+                {archs.map((arch, i) => {
+                    const archKey = `${arch.hiddenLayers.join("x")}-${arch.activation}`;
+                    const active = archKey === currentKey;
+                    return (
+                        <option key={archKey} value={i}>
+                            {arch.name} [{arch.hiddenLayers.join(",")}]-{arch.activation}
+                            {" "}({arch.totalEpisodes.toLocaleString()} ep, score {arch.bestScore.toFixed(3)})
+                            {active ? " ✓ current" : ""}
+                        </option>
+                    );
+                })}
+            </select>
+            <span className="mt-1 block text-[11px] leading-snug text-muted-foreground/70">
+                Selecting a saved architecture sets the layers and activation to match, and the trained weights load automatically.
+            </span>
+        </div>
+    );
+}
+
 function AgentFields({
     algorithm,
     setAlgorithm,
@@ -194,6 +258,16 @@ function AgentFields({
 
             {hasNet ? (
                 <>
+                    {/* Load saved experiment weights */}
+                    <WeightSelector
+                        config={config}
+                        onApply={(arch) => patch({
+                            hiddenLayers: [...arch.hiddenLayers],
+                            activation: arch.activation as AgentConfig["activation"],
+                        })}
+                        locked={locked}
+                    />
+
                     <div className="grid grid-cols-2 gap-3">
                         <NumberField
                             label="Learning rate α"

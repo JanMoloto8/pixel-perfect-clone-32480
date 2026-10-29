@@ -5,7 +5,7 @@
  * start it, watch progress, and download results as a ZIP.
  */
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,7 @@ import { useExperiment, bestRunResult } from "@/hooks/useExperiment";
 import type { ExperimentConfig, TrainOpponent, EvalOpponent, RunResult, Checkpoint } from "@/rl/experiment";
 import { DEFAULT_EXPERIMENT_CONFIG, trainingStatsToCsv, evalCheckpointsToCsv } from "@/rl/experiment";
 import { ACTIVATIONS, type ActivationName } from "@/types/AgentConfig";
+import { Brain, Trash2, X } from "lucide-react";
 import {
     LineChart,
     Line,
@@ -35,6 +36,12 @@ import {
     ResponsiveContainer,
     Legend,
 } from "recharts";
+import {
+    type SavedArchitecture,
+    saveWeightsToLocalStorage,
+    listSavedArchitectures,
+    deleteSavedArchitecture,
+} from "./savedArchitectures";
 
 /* ------------------------------------------------------------------ */
 /*  Config form                                                       */
@@ -294,23 +301,24 @@ const CHART_COLORS = [
 function EvalScoreChart({ runs }: { runs: RunResult[] }) {
     if (runs.length === 0) return null;
 
-    // Build data: one row per checkpoint episode, one column per (run × opponent)
+    // Build data: one row per checkpoint, with global episode numbering.
+    // Each run's checkpoints are offset by the total episodes of prior runs.
     const allOpponents = runs[0].config.evalOpponents;
-    const episodes = runs[0].checkpoints.map((cp) => cp.episode);
+    const epsPerRun = runs[0].config.totalEpisodes;
 
-    const data = episodes.map((ep, i) => {
-        const row: Record<string, number> = { episode: ep };
-        runs.forEach((run, ri) => {
-            const cp = run.checkpoints[i];
-            if (!cp) return;
+    const data: Record<string, number>[] = [];
+    runs.forEach((run, ri) => {
+        const offset = ri * epsPerRun;
+        for (const cp of run.checkpoints) {
+            const row: Record<string, number> = { episode: cp.episode + offset };
             for (const opp of allOpponents) {
                 const key = runs.length > 1 ? `R${ri + 1} vs ${opp}` : `vs ${opp}`;
                 row[key] = cp.evalResults[opp]?.score ?? 0;
             }
             const avgKey = runs.length > 1 ? `R${ri + 1} avg` : "avg";
             row[avgKey] = cp.avgScore;
-        });
-        return row;
+            data.push(row);
+        }
     });
 
     // Derive line keys
@@ -347,16 +355,17 @@ function EvalScoreChart({ runs }: { runs: RunResult[] }) {
 function TrainingChart({ runs }: { runs: RunResult[] }) {
     if (runs.length === 0) return null;
 
-    // Show mean |TD| for each run
-    const maxLen = Math.max(...runs.map((r) => r.trainingStats.length));
-    const data = Array.from({ length: maxLen }, (_, i) => {
-        const row: Record<string, number> = { episode: i + 1 };
-        runs.forEach((run, ri) => {
-            const stat = run.trainingStats[i];
-            if (!stat) return;
+    // Show mean |TD| for each run with global episode numbering.
+    // Each run's episodes are offset by the total episodes of prior runs.
+    const epsPerRun = runs[0].config.totalEpisodes;
+    const data: Record<string, number>[] = [];
+    runs.forEach((run, ri) => {
+        const offset = ri * epsPerRun;
+        run.trainingStats.forEach((stat) => {
+            const row: Record<string, number> = { episode: stat.episode + offset };
             row[`R${ri + 1} |δ|`] = stat.mean_abs_td;
+            data.push(row);
         });
-        return row;
     });
 
     // Downsample if too many points
@@ -562,6 +571,98 @@ async function downloadAllAsZip(runs: RunResult[], config: ExperimentConfig) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Saved architectures picker                                        */
+/* ------------------------------------------------------------------ */
+
+function ArchitecturePicker({
+    open,
+    onClose,
+}: {
+    open: boolean;
+    onClose: () => void;
+}) {
+    const [archs, setArchs] = useState<SavedArchitecture[]>([]);
+
+    const refresh = useCallback(() => {
+        setArchs(listSavedArchitectures());
+    }, []);
+
+    useEffect(() => {
+        if (open) refresh();
+    }, [open, refresh]);
+
+    if (!open) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <Card className="w-full max-w-md mx-4 max-h-[80vh] flex flex-col">
+                <CardHeader className="py-3 px-4 flex flex-row items-center justify-between space-y-0">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                        <Brain className="h-4 w-4" />
+                        Saved Network Architectures
+                    </CardTitle>
+                    <Button variant="ghost" size="sm" onClick={onClose} className="h-7 w-7 p-0">
+                        <X className="h-4 w-4" />
+                    </Button>
+                </CardHeader>
+                <CardContent className="px-4 pb-4 overflow-y-auto">
+                    {archs.length === 0 ? (
+                        <div className="py-8 text-center text-sm text-muted-foreground">
+                            Nothing in local storage.
+                            <p className="mt-1 text-xs">
+                                Run an experiment to train and save a network architecture.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {archs.map((arch) => {
+                                const archKey = `${arch.hiddenLayers.join("x")}-${arch.activation}`;
+                                return (
+                                    <div
+                                        key={archKey}
+                                        className="flex items-start justify-between gap-2 rounded-md border border-border p-3"
+                                    >
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-sm font-medium truncate">
+                                                {arch.name}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                [{arch.hiddenLayers.join(", ")}] · {arch.activation}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {arch.totalEpisodes.toLocaleString()} episodes ({arch.runs} run{arch.runs !== 1 ? "s" : ""})
+                                                · best score {arch.bestScore.toFixed(3)}
+                                            </p>
+                                            <p className="text-[10px] text-muted-foreground/70">
+                                                Saved {new Date(arch.savedAt).toLocaleString()}
+                                            </p>
+                                        </div>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                                            onClick={() => {
+                                                deleteSavedArchitecture(arch);
+                                                refresh();
+                                            }}
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </div>
+                                );
+                            })}
+                            <p className="text-[10px] text-muted-foreground text-center pt-1">
+                                These weights are loaded automatically when an arena agent uses a matching architecture.
+                            </p>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Main panel                                                        */
 /* ------------------------------------------------------------------ */
 
@@ -580,12 +681,46 @@ export function ExperimentPanel() {
         reset,
     } = experiment;
 
+    const [pickerOpen, setPickerOpen] = useState(false);
+    const [savedMsg, setSavedMsg] = useState<string | null>(null);
+
     const locked = status === "running";
     const hasResults = completedRuns.length > 0 || (allResults && allResults.length > 0);
     const displayRuns = allResults ?? completedRuns;
 
+    // Auto-save weights to localStorage when experiment completes
+    useEffect(() => {
+        if (status === "completed" && allResults && allResults.length > 0) {
+            const lastRun = allResults[allResults.length - 1];
+            const best = bestRunResult(allResults);
+            saveWeightsToLocalStorage(
+                config,
+                lastRun.finalWeights,
+                best?.bestScore ?? lastRun.bestScore,
+            );
+            setSavedMsg(`Weights saved to arena as [${config.hiddenLayers.join(", ")}]-${config.activation}`);
+        }
+    }, [status, allResults, config]);
+
+    // Clear saved message on reset
+    useEffect(() => {
+        if (status === "idle") setSavedMsg(null);
+    }, [status]);
+
     return (
         <div className="space-y-4">
+            {/* Architecture picker button */}
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPickerOpen(true)}
+                className="w-full flex items-center gap-2"
+            >
+                <Brain className="h-4 w-4" />
+                Saved Architectures
+            </Button>
+            <ArchitecturePicker open={pickerOpen} onClose={() => setPickerOpen(false)} />
+
             {/* Configuration */}
             <Card>
                 <CardHeader className="py-3 px-4">
@@ -624,6 +759,13 @@ export function ExperimentPanel() {
                     </>
                 )}
             </div>
+
+            {/* Saved weights confirmation */}
+            {savedMsg && (
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 text-center">
+                    ✓ {savedMsg}
+                </p>
+            )}
 
             {/* Progress */}
             {status === "running" && (
